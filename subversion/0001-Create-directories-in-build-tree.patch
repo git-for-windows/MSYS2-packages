@@ -1,14 +1,14 @@
-Create directories in build tree.
-
+From 17fbf27d99c8715f2ec1e4e1822cc3b72f8d6e74 Mon Sep 17 00:00:00 2001
 From: David Rothenberger <d.rothenberger@entomo.com>
-
+Date: Thu, 7 Nov 2013 23:02:43 +0400
+Subject: [PATCH 01/22] Create directories in build tree.
 
 ---
- configure.ac |    5 +++++
+ configure.ac | 5 +++++
  1 file changed, 5 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index 4a3683c..a758b73 100644
+index 42a9f14..60b99f2 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -1652,6 +1652,11 @@ AC_DEFINE_UNQUOTED([SVN_BUILD_TARGET], "${target}",
@@ -23,3 +23,6 @@ index 4a3683c..a758b73 100644
  
  # ==== Print final messages to user ==========================================
  
+-- 
+2.37.2
+
