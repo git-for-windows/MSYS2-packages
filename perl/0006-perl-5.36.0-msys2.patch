@@ -1,4 +1,4 @@
-From badb6df6fd00b343b810886a647fa793ab2ef539 Mon Sep 17 00:00:00 2001
+From bbd33b8cd072fb0e30d2d872f57ddf6ffb96e26a Mon Sep 17 00:00:00 2001
 From: Alexey Pavlov <alexpux@gmail.com>
 Date: Tue, 5 Nov 2013 00:30:05 +0400
 Subject: [PATCH 6/7] perl-5.36.0-msys2
@@ -126,10 +126,10 @@ Subject: [PATCH 6/7] perl-5.36.0-msys2
  create mode 100644 hints/msys.sh
 
 diff --git a/Configure b/Configure
-index 24366f6..368f7ad 100755
+index 9d17951a..a1db1d1f 100755
 --- a/Configure
 +++ b/Configure
-@@ -1440,7 +1440,7 @@ elif test -f /kern/cookiejar; then
+@@ -1452,7 +1452,7 @@ elif test -f /kern/cookiejar; then
  : MiNT
      _exe=""
  elif test -d c:/. -o -n "$is_os2" ; then
@@ -138,7 +138,7 @@ index 24366f6..368f7ad 100755
      _exe=".exe"
  fi
  
-@@ -3480,6 +3480,9 @@ EOM
+@@ -3504,6 +3504,9 @@ EOM
  		cygwin*) osname=cygwin
  			osvers="$3"
  			;;
@@ -148,7 +148,7 @@ index 24366f6..368f7ad 100755
  		*dc.osx) osname=dcosx
  			osvers="$3"
  			;;
-@@ -8705,7 +8708,7 @@ $undef)
+@@ -8675,7 +8678,7 @@ $undef)
  	;;
  *)	case "$useshrplib" in
  	'')	case "$osname" in
@@ -157,7 +157,7 @@ index 24366f6..368f7ad 100755
  			dflt=y
  			also='Building a shared libperl is required for dynamic loading to work on your system.'
  			;;
-@@ -8776,6 +8779,13 @@ true)
+@@ -8746,6 +8749,13 @@ true)
  			majonly=cygperl5.$majonly.$so
  			dflt=$majmin
  			;;
@@ -171,7 +171,7 @@ index 24366f6..368f7ad 100755
  		*)	# Try to guess based on whether libc has major.minor.
  			case "$libc" in
  			*libc.$so.[0-9]*.[0-9]*) dflt=$majmin ;;
-@@ -8867,6 +8877,9 @@ if "$useshrplib"; then
+@@ -8837,6 +8847,9 @@ if "$useshrplib"; then
  	cygwin)
  		# cygwin needs only ldlibpth
  		;;
@@ -181,7 +181,7 @@ index 24366f6..368f7ad 100755
  	*)
  		tmp_shrpenv="env LD_RUN_PATH=$shrpdir"
  		;;
-@@ -23537,7 +23550,7 @@ BeOS BIG_ENDIAN BIT_MSF BSD bsd bsd43 bsd4_2 BSD4_3 bsd4_3 bsd4_4
+@@ -23891,7 +23904,7 @@ BeOS BIG_ENDIAN BIT_MSF BSD bsd bsd43 bsd4_2 BSD4_3 bsd4_3 bsd4_4
  BSDCOMPAT bsdi BSD_4_3 BSD_4_4 BSD_NET2 BSD_TIME BSD_TYPES bull
  byteorder byte_order
  c cadmus clang clipper CMU COFF COMPILER_VERSION concurrent
@@ -190,7 +190,7 @@ index 24366f6..368f7ad 100755
  DECC DGUX DGUX_SOURCE DJGPP dmert DOLPHIN DPX2 DSO Dynix DynixPTX
  ELF encore EPI EXTENSIONS
  FAVOR_BSD FILE_OFFSET_BITS FORTIFY_SOURCE FreeBSD
-@@ -24163,6 +24176,7 @@ for xxx in $xs_extensions ; do
+@@ -24517,6 +24530,7 @@ for xxx in $xs_extensions ; do
  	Win32*)
  		case "$osname" in
  		cygwin) avail_ext="$avail_ext $xxx" ;;
@@ -199,7 +199,7 @@ index 24366f6..368f7ad 100755
  		;;
  	XS/APItest|xs/apitest)
 diff --git a/Cross/Makefile-cross-SH b/Cross/Makefile-cross-SH
-index a774f4a..26d4d61 100644
+index 0abd0a43..f1768170 100644
 --- a/Cross/Makefile-cross-SH
 +++ b/Cross/Makefile-cross-SH
 @@ -55,8 +55,8 @@ true)
@@ -222,17 +222,17 @@ index a774f4a..26d4d61 100644
  	;; # Let cygwin/Makefile.SHs do its work.
  *)
  	$spitshell >>$Makefile <<'!NO!SUBS!'
-@@ -948,7 +948,7 @@ _mopup:
+@@ -940,7 +940,7 @@ _mopup:
  	-rm -f perl.third lib*.so.perl.third perl.3log t/perl.third t/perl.3log
  	-rm -f perl.pixie lib*.so.perl.pixie lib*.so.Addrs
  	-rm -f perl.Addrs perl.Counts t/perl.Addrs t/perl.Counts *perl.xok
 -	-rm -f cygwin.c libperl*.def libperl*.dll cygperl*.dll *.exe.stackdump
 +	-rm -f cygwin.c libperl*.def libperl*.dll msys-perl*.dll *.exe.stackdump
- 	-rm -f perl$(EXE_EXT) miniperl$(EXE_EXT) $(LIBPERL) libperl.* microperl
+ 	-rm -f perl$(EXE_EXT) miniperl$(EXE_EXT) $(LIBPERL) libperl.*
  	-rm -f config.over
  
 diff --git a/Makefile.SH b/Makefile.SH
-index e2490da..547bd49 100755
+index 2c54238f..65483062 100755
 --- a/Makefile.SH
 +++ b/Makefile.SH
 @@ -72,7 +72,7 @@ true)
@@ -244,16 +244,16 @@ index e2490da..547bd49 100755
  		shrpldflags="$shrpldflags -Wl,--out-implib=libperl.dll.a"
  		linklibperl="-L. -lperl"
  		;;
-@@ -1360,7 +1360,7 @@ _mopup:
+@@ -1365,7 +1365,7 @@ _mopup:
  	-rm -f perl.exp ext.libs $(generated_pods) uni.data $(mini_only_objs) pod/roffitall
  	-rm -f perl.export perl.dll perl.libexp perl.map perl.def
  	-rm -f *perl.xok
 -	-rm -f cygwin.c libperl*.def libperl*.dll cygperl*.dll *.exe.stackdump
 +	-rm -f cygwin.c libperl*.def libperl*.dll cygperl*.dll msys-perl*.dll *.exe.stackdump
- 	-rm -f $(PERL_EXE) $(MINIPERL_EXE) $(LIBPERL) libperl.* microperl
+ 	-rm -f $(PERL_EXE) $(MINIPERL_EXE) $(LIBPERL) libperl.*
  	-rm -f config.arch config.over $(DTRACE_H)
  
-@@ -1524,7 +1524,7 @@ case "$targethost" in
+@@ -1535,7 +1535,7 @@ case "$targethost" in
  '') $spitshell >>$Makefile <<'!NO!SUBS!'
  test_prep test-prep: test_prep_pre $(MINIPERL_EXE) $(unidatafiles) $(PERL_EXE) \
  	$(dynamic_ext) $(TEST_PERL_DLL) runtests $(generated_pods) common_build
@@ -263,10 +263,10 @@ index e2490da..547bd49 100755
  !NO!SUBS!
  ;;
 diff --git a/configpm b/configpm
-index 94a4778..284e322 100755
+index 07219d8e..b06d2432 100755
 --- a/configpm
 +++ b/configpm
-@@ -459,8 +459,8 @@ EOT
+@@ -464,8 +464,8 @@ EOT
  
  my $osname = fetch_string({}, 'osname');
  my $from = $osname eq 'VMS' ? 'PERLSHR image' : 'binary (from libperl)';
@@ -275,10 +275,10 @@ index 94a4778..284e322 100755
 +my $env_cygwin = ($^O eq 'cygwin' || $^O eq 'msys')
 +    ? 'push @env, "MSYS=\"$ENV{MSYS}\"" if $ENV{MSYS};' . "\n" : "";
  
- $heavy_txt .= sprintf <<'ENDOFBEG', $osname, $osname, $from, $osname, $env_cygwin;
- # This file was created by configpm when Perl was built. Any changes
+ $heavy_txt .= sprintf uncomment <<'ENDOFBEG', $osname, $osname, $from, $osname, $env_cygwin;
+ #    # This file was created by configpm when Perl was built. Any changes
 diff --git a/cpan/Archive-Tar/t/02_methods.t b/cpan/Archive-Tar/t/02_methods.t
-index 19d9212..e0e73b5 100644
+index 519535e8..b503eb8d 100644
 --- a/cpan/Archive-Tar/t/02_methods.t
 +++ b/cpan/Archive-Tar/t/02_methods.t
 @@ -60,7 +60,7 @@ my @EXPECTX = (
@@ -291,7 +291,7 @@ index 19d9212..e0e73b5 100644
  
  if(!$TOO_LONG) {
 diff --git a/cpan/CPAN-Meta/t/data-fail/META-1_4.yml b/cpan/CPAN-Meta/t/data-fail/META-1_4.yml
-index cec4d11..b04c410 100644
+index cec4d11c..b04c4102 100644
 --- a/cpan/CPAN-Meta/t/data-fail/META-1_4.yml
 +++ b/cpan/CPAN-Meta/t/data-fail/META-1_4.yml
 @@ -77,6 +77,9 @@ provides:
@@ -305,7 +305,7 @@ index cec4d11..b04c410 100644
      file: lib/Module/Build/Platform/darwin.pm
      version: 0.36_08
 diff --git a/cpan/CPAN-Meta/t/data-fixable/META-1_4.yml b/cpan/CPAN-Meta/t/data-fixable/META-1_4.yml
-index 1336f10..7944d8f 100644
+index 1336f10a..7944d8f8 100644
 --- a/cpan/CPAN-Meta/t/data-fixable/META-1_4.yml
 +++ b/cpan/CPAN-Meta/t/data-fixable/META-1_4.yml
 @@ -76,6 +76,9 @@ provides:
@@ -319,7 +319,7 @@ index 1336f10..7944d8f 100644
      file: lib/Module/Build/Platform/darwin.pm
      version: 0.36_08
 diff --git a/cpan/CPAN-Meta/t/data-fixable/invalid-meta-spec-version.yml b/cpan/CPAN-Meta/t/data-fixable/invalid-meta-spec-version.yml
-index d74cde6..c360ca1 100644
+index d74cde68..c360ca15 100644
 --- a/cpan/CPAN-Meta/t/data-fixable/invalid-meta-spec-version.yml
 +++ b/cpan/CPAN-Meta/t/data-fixable/invalid-meta-spec-version.yml
 @@ -77,6 +77,9 @@ provides:
@@ -333,7 +333,7 @@ index d74cde6..c360ca1 100644
      file: lib/Module/Build/Platform/darwin.pm
      version: 0.36_08
 diff --git a/cpan/CPAN-Meta/t/data-fixable/meta-spec-version-trailing-zeros.yml b/cpan/CPAN-Meta/t/data-fixable/meta-spec-version-trailing-zeros.yml
-index 92445cb..94156d0 100644
+index 92445cba..94156d03 100644
 --- a/cpan/CPAN-Meta/t/data-fixable/meta-spec-version-trailing-zeros.yml
 +++ b/cpan/CPAN-Meta/t/data-fixable/meta-spec-version-trailing-zeros.yml
 @@ -77,6 +77,9 @@ provides:
@@ -347,7 +347,7 @@ index 92445cb..94156d0 100644
      file: lib/Module/Build/Platform/darwin.pm
      version: 0.36_08
 diff --git a/cpan/CPAN-Meta/t/data-test/META-1_4.yml b/cpan/CPAN-Meta/t/data-test/META-1_4.yml
-index 801f579..60f598f 100644
+index 801f5797..60f598f9 100644
 --- a/cpan/CPAN-Meta/t/data-test/META-1_4.yml
 +++ b/cpan/CPAN-Meta/t/data-test/META-1_4.yml
 @@ -77,6 +77,9 @@ provides:
@@ -361,7 +361,7 @@ index 801f579..60f598f 100644
      file: lib/Module/Build/Platform/darwin.pm
      version: 0.36_08
 diff --git a/cpan/CPAN-Meta/t/data-test/restrictive-1_4.yml b/cpan/CPAN-Meta/t/data-test/restrictive-1_4.yml
-index b780016..ee2ceac 100644
+index b780016d..ee2ceac5 100644
 --- a/cpan/CPAN-Meta/t/data-test/restrictive-1_4.yml
 +++ b/cpan/CPAN-Meta/t/data-test/restrictive-1_4.yml
 @@ -77,6 +77,9 @@ provides:
@@ -375,7 +375,7 @@ index b780016..ee2ceac 100644
      file: lib/Module/Build/Platform/darwin.pm
      version: 0.36_08
 diff --git a/cpan/CPAN-Meta/t/data-test/unicode.yml b/cpan/CPAN-Meta/t/data-test/unicode.yml
-index 8aa5bca..b902e0b 100644
+index 8aa5bca7..b902e0b0 100644
 --- a/cpan/CPAN-Meta/t/data-test/unicode.yml
 +++ b/cpan/CPAN-Meta/t/data-test/unicode.yml
 @@ -77,6 +77,9 @@ provides:
@@ -389,10 +389,10 @@ index 8aa5bca..b902e0b 100644
      file: lib/Module/Build/Platform/darwin.pm
      version: 0.36_08
 diff --git a/cpan/Compress-Raw-Zlib/Makefile.PL b/cpan/Compress-Raw-Zlib/Makefile.PL
-index bf3681b..1aa5cc5 100644
+index ad2d1520..2233867c 100644
 --- a/cpan/Compress-Raw-Zlib/Makefile.PL
 +++ b/cpan/Compress-Raw-Zlib/Makefile.PL
-@@ -32,7 +32,7 @@ my $ZLIB_LIBRARY_NAME = $^O eq 'MSWin32' ? 'zlib' : 'z' ;
+@@ -30,7 +30,7 @@ my $ZLIB_LIBRARY_NAME = $^O eq 'MSWin32' ? 'zlib' : 'z' ;
  # ExtUtils::Install.
  
  # Don't ask if MM_USE_DEFAULT is set -- enables perl core building on cygwin
@@ -402,7 +402,7 @@ index bf3681b..1aa5cc5 100644
  {
      print <<EOM ;
 diff --git a/cpan/DB_File/t/db-btree.t b/cpan/DB_File/t/db-btree.t
-index fc19e99..88cbcea 100644
+index fc19e997..88cbcea7 100644
 --- a/cpan/DB_File/t/db-btree.t
 +++ b/cpan/DB_File/t/db-btree.t
 @@ -106,7 +106,8 @@ sub normalise
@@ -425,7 +425,7 @@ index fc19e99..88cbcea 100644
  ok(18, ($mode & 0777) == (($^O eq 'os2' || $^O eq 'MacOS') ? 0666 : 0640)
     || $noMode{$^O} );
 diff --git a/cpan/DB_File/t/db-hash.t b/cpan/DB_File/t/db-hash.t
-index cc10bfc..4b18f21 100644
+index cc10bfcb..4b18f217 100644
 --- a/cpan/DB_File/t/db-hash.t
 +++ b/cpan/DB_File/t/db-hash.t
 @@ -70,7 +70,7 @@ sub normalise
@@ -447,7 +447,7 @@ index cc10bfc..4b18f21 100644
  ok(16, ($mode & 0777) == (($^O eq 'os2' || $^O eq 'MacOS') ? 0666 : 0640) ||
     $noMode{$^O} );
 diff --git a/cpan/DB_File/t/db-recno.t b/cpan/DB_File/t/db-recno.t
-index 4b80e93..8caca08 100644
+index 4b80e93b..8caca08b 100644
 --- a/cpan/DB_File/t/db-recno.t
 +++ b/cpan/DB_File/t/db-recno.t
 @@ -127,7 +127,7 @@ EOM
@@ -469,7 +469,7 @@ index 4b80e93..8caca08 100644
  ok(18, ((stat($Dfile))[2] & 0777) == (($^O eq 'os2' || $^O eq 'MacOS') ? 0666 : 0640)
          ||  $noMode{$^O} );
 diff --git a/cpan/Digest-SHA/shasum b/cpan/Digest-SHA/shasum
-index 46a7162..4d7f0b0 100644
+index 3a1a9c4f..e93f24f9 100644
 --- a/cpan/Digest-SHA/shasum
 +++ b/cpan/Digest-SHA/shasum
 @@ -201,7 +201,7 @@ if ($version) {
@@ -482,7 +482,7 @@ index 46a7162..4d7f0b0 100644
  
  my $modesym = $binary ? '*' : ($UNIVERSAL ? 'U' : ($BITS ? '^' : ' '));
 diff --git a/cpan/ExtUtils-Install/lib/ExtUtils/Install.pm b/cpan/ExtUtils-Install/lib/ExtUtils/Install.pm
-index 9608180..e748ece 100644
+index 83db80df..45334709 100644
 --- a/cpan/ExtUtils-Install/lib/ExtUtils/Install.pm
 +++ b/cpan/ExtUtils-Install/lib/ExtUtils/Install.pm
 @@ -88,8 +88,8 @@ Dies with a special message.
@@ -497,10 +497,10 @@ index 9608180..e748ece 100644
  
  my $Inc_uninstall_warn_handler;
 diff --git a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist/Kid.pm b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist/Kid.pm
-index 01a4a48..7e9416e 100644
+index 298a026b..d35cfab6 100644
 --- a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist/Kid.pm
 +++ b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist/Kid.pm
-@@ -188,6 +188,8 @@ sub _unix_os2_ext {
+@@ -189,6 +189,8 @@ sub _unix_os2_ext {
              }
              elsif ( $^O eq 'cygwin' && -f ( $fullname = "$thispth/$thislib.dll" ) ) {
              }
@@ -510,7 +510,7 @@ index 01a4a48..7e9416e 100644
              }
              elsif ($^O eq 'dgux'
 diff --git a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM.pm b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM.pm
-index a9d8d26..16a1c15 100644
+index 554e6fbb..75f385f1 100644
 --- a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM.pm
 +++ b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM.pm
 @@ -59,7 +59,7 @@ if( $^O eq 'MSWin32' ) {
@@ -523,7 +523,7 @@ index a9d8d26..16a1c15 100644
  $Is{BeOS}   = ($^O =~ /beos/i or $^O eq 'haiku');
  $Is{DOS}    = $^O eq 'dos';
 diff --git a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Cygwin.pm b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Cygwin.pm
-index 91d2094..992e6b9 100644
+index f44877b2..893caf92 100644
 --- a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Cygwin.pm
 +++ b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Cygwin.pm
 @@ -35,7 +35,7 @@ We're Unix and Cygwin.
@@ -554,7 +554,7 @@ index 91d2094..992e6b9 100644
  }
  
 diff --git a/cpan/ExtUtils-MakeMaker/t/03-xsstatic.t b/cpan/ExtUtils-MakeMaker/t/03-xsstatic.t
-index dceed52..3c22c84 100644
+index dceed52a..3c22c841 100644
 --- a/cpan/ExtUtils-MakeMaker/t/03-xsstatic.t
 +++ b/cpan/ExtUtils-MakeMaker/t/03-xsstatic.t
 @@ -19,7 +19,7 @@ use Test::More;
@@ -567,7 +567,7 @@ index dceed52..3c22c84 100644
  plan skip_all => 'Skipped as perl.exp is not in scope' if -s '../../../perl.exp' && $ENV{PERL_CORE};
  my @tests = list_static();
 diff --git a/cpan/ExtUtils-MakeMaker/t/MM_Cygwin.t b/cpan/ExtUtils-MakeMaker/t/MM_Cygwin.t
-index 5a7f8b3..d34c5ec 100644
+index 5a7f8b36..d34c5ecf 100644
 --- a/cpan/ExtUtils-MakeMaker/t/MM_Cygwin.t
 +++ b/cpan/ExtUtils-MakeMaker/t/MM_Cygwin.t
 @@ -10,7 +10,7 @@ use warnings;
@@ -580,7 +580,7 @@ index 5a7f8b3..d34c5ec 100644
  	} else {
  		plan skip_all => "This is not cygwin";
 diff --git a/cpan/ExtUtils-MakeMaker/t/MM_Unix.t b/cpan/ExtUtils-MakeMaker/t/MM_Unix.t
-index b3175f4..73adc79 100644
+index b3175f4f..73adc794 100644
 --- a/cpan/ExtUtils-MakeMaker/t/MM_Unix.t
 +++ b/cpan/ExtUtils-MakeMaker/t/MM_Unix.t
 @@ -8,7 +8,7 @@ chdir 't';
@@ -593,7 +593,7 @@ index b3175f4..73adc79 100644
      }
      else {
 diff --git a/cpan/ExtUtils-MakeMaker/t/Mkbootstrap.t b/cpan/ExtUtils-MakeMaker/t/Mkbootstrap.t
-index c0edfda..4f6857c 100644
+index c0edfda5..4f6857c6 100644
 --- a/cpan/ExtUtils-MakeMaker/t/Mkbootstrap.t
 +++ b/cpan/ExtUtils-MakeMaker/t/Mkbootstrap.t
 @@ -78,7 +78,7 @@ SKIP: {
@@ -606,10 +606,10 @@ index c0edfda..4f6857c 100644
  	    eval{ Mkbootstrap('dasboot', 1) };
  	    like( $@, qr/Unable to open dasboot\.bs/, 'should die given bad filename' );
 diff --git a/cpan/ExtUtils-MakeMaker/t/eu_command.t b/cpan/ExtUtils-MakeMaker/t/eu_command.t
-index 0233c2f..ace9885 100644
+index 79ca6c3a..c895c43b 100644
 --- a/cpan/ExtUtils-MakeMaker/t/eu_command.t
 +++ b/cpan/ExtUtils-MakeMaker/t/eu_command.t
-@@ -100,7 +100,7 @@ BEGIN {
+@@ -107,7 +107,7 @@ BEGIN {
      SKIP: {
          if ($^O eq 'amigaos' || $^O eq 'os2' || $^O eq 'MSWin32' ||
              $^O eq 'NetWare' || $^O eq 'dos' || $^O eq 'cygwin'  ||
@@ -618,7 +618,7 @@ index 0233c2f..ace9885 100644
             ) {
              skip( "different file permission semantics on $^O", 3);
          }
-@@ -140,7 +140,7 @@ BEGIN {
+@@ -147,7 +147,7 @@ BEGIN {
      SKIP: {
          if ($^O eq 'amigaos' || $^O eq 'os2' || $^O eq 'MSWin32' ||
              $^O eq 'NetWare' || $^O eq 'dos' || $^O eq 'cygwin'  ||
@@ -628,7 +628,7 @@ index 0233c2f..ace9885 100644
              skip( "different file permission semantics on $^O", 5);
          }
 diff --git a/cpan/ExtUtils-MakeMaker/t/fixin.t b/cpan/ExtUtils-MakeMaker/t/fixin.t
-index b942a5f..711fa79 100644
+index b942a5f9..711fa79b 100644
 --- a/cpan/ExtUtils-MakeMaker/t/fixin.t
 +++ b/cpan/ExtUtils-MakeMaker/t/fixin.t
 @@ -130,7 +130,7 @@ END
@@ -641,10 +641,10 @@ index b942a5f..711fa79 100644
      my $dir = getcwd();
      local $ENV{PATH} = join $Config{path_sep}, map "$dir/$_", qw(usrbin bin);
 diff --git a/cpan/ExtUtils-Manifest/t/Manifest.t b/cpan/ExtUtils-Manifest/t/Manifest.t
-index 183786b..327a218 100644
+index 9c884cef..123e7474 100644
 --- a/cpan/ExtUtils-Manifest/t/Manifest.t
 +++ b/cpan/ExtUtils-Manifest/t/Manifest.t
-@@ -455,7 +455,7 @@ is_deeply( $files, \%expect, 'maniadd() vs MANIFEST without trailing newline');
+@@ -466,7 +466,7 @@ is_deeply( $files, \%expect, 'maniadd() vs MANIFEST without trailing newline');
  
  SKIP: {
      chmod( 0400, 'MANIFEST' );
@@ -654,7 +654,7 @@ index 183786b..327a218 100644
      eval {
          maniadd({ 'foo' => 'bar' });
 diff --git a/cpan/File-Path/t/Path.t b/cpan/File-Path/t/Path.t
-index b265aee..5341cb8 100644
+index b265aeeb..5341cb8c 100644
 --- a/cpan/File-Path/t/Path.t
 +++ b/cpan/File-Path/t/Path.t
 @@ -499,7 +499,7 @@ SKIP : {
@@ -667,7 +667,7 @@ index b265aee..5341cb8 100644
  	    }
          rmtree( $dir );
 diff --git a/cpan/File-Temp/lib/File/Temp.pm b/cpan/File-Temp/lib/File/Temp.pm
-index 570f25a..a6668d3 100644
+index 570f25a5..a6668d37 100644
 --- a/cpan/File-Temp/lib/File/Temp.pm
 +++ b/cpan/File-Temp/lib/File/Temp.pm
 @@ -828,7 +828,7 @@ sub _can_do_level {
@@ -689,7 +689,7 @@ index 570f25a..a6668d3 100644
    # fall-through if we can't unlink now
    _deferred_unlink($fh, $path, 0);
 diff --git a/cpan/IO-Compress/t/cz-14gzopen.t b/cpan/IO-Compress/t/cz-14gzopen.t
-index 59a4d82..7406551 100644
+index 6d4e2012..67bc4d0d 100644
 --- a/cpan/IO-Compress/t/cz-14gzopen.t
 +++ b/cpan/IO-Compress/t/cz-14gzopen.t
 @@ -490,7 +490,7 @@ foreach my $stdio ( ['-', '-'], [*STDIN, *STDOUT])
@@ -701,7 +701,7 @@ index 59a4d82..7406551 100644
  
          my $lex = LexFile->new( my $name );
          writeFile($name, "abc");
-@@ -514,7 +514,7 @@ foreach my $stdio ( ['-', '-'], [*STDIN, *STDOUT])
+@@ -525,7 +525,7 @@ foreach my $stdio ( ['-', '-'], [*STDIN, *STDOUT])
      {
          my $lex = LexFile->new( my $name );
          skip "Cannot create non-readable file", 3
@@ -711,10 +711,10 @@ index 59a4d82..7406551 100644
          writeFile($name, "abc");
          chmod 0222, $name ;
 diff --git a/cpan/IO-Socket-IP/t/11sockopts.t b/cpan/IO-Socket-IP/t/11sockopts.t
-index e3bbd08..1ae1a67 100644
+index e0bee29e..c4f001ef 100644
 --- a/cpan/IO-Socket-IP/t/11sockopts.t
 +++ b/cpan/IO-Socket-IP/t/11sockopts.t
-@@ -12,7 +12,7 @@ use Errno qw( EACCES );
+@@ -11,7 +11,7 @@ use Errno qw( EACCES );
  use Socket qw( SOL_SOCKET SO_REUSEADDR SO_REUSEPORT SO_BROADCAST );
  
  TODO: {
@@ -724,7 +724,7 @@ index e3bbd08..1ae1a67 100644
     # to reproduce it on a development box. I'll mark it TODO for now until we
     # can gain any more insight into it.
 diff --git a/cpan/IPC-Cmd/t/03_run-forked.t b/cpan/IPC-Cmd/t/03_run-forked.t
-index 42e7709..3f651e2 100644
+index 42e77096..3f651e2c 100644
 --- a/cpan/IPC-Cmd/t/03_run-forked.t
 +++ b/cpan/IPC-Cmd/t/03_run-forked.t
 @@ -44,7 +44,7 @@ $r = run_forked("$sleep 5", {'timeout' => 2});
@@ -737,7 +737,7 @@ index 42e7709..3f651e2 100644
    sub runSub {
         my $blah = "blahblah";
 diff --git a/cpan/IPC-SysV/t/ipcsysv.t b/cpan/IPC-SysV/t/ipcsysv.t
-index 8bbea07..a1a0b4e 100644
+index 8bbea07f..a1a0b4e8 100644
 --- a/cpan/IPC-SysV/t/ipcsysv.t
 +++ b/cpan/IPC-SysV/t/ipcsysv.t
 @@ -42,18 +42,18 @@ use IPC::SysV qw(IPC_PRIVATE IPC_NOWAIT IPC_STAT IPC_RMID S_IRWXU);
@@ -763,7 +763,7 @@ index 8bbea07..a1a0b4e 100644
  EOM
      }
 diff --git a/cpan/Pod-Perldoc/lib/Pod/Perldoc.pm b/cpan/Pod-Perldoc/lib/Pod/Perldoc.pm
-index bb6ffc8..5fc5002 100644
+index bb6ffc83..5fc50026 100644
 --- a/cpan/Pod-Perldoc/lib/Pod/Perldoc.pm
 +++ b/cpan/Pod-Perldoc/lib/Pod/Perldoc.pm
 @@ -66,7 +66,7 @@ BEGIN {
@@ -776,7 +776,7 @@ index bb6ffc8..5fc5002 100644
   *is_hpux    = $^O =~ m/hpux/   ? \&TRUE : \&FALSE unless defined &is_hpux;
   *is_amigaos = $^O eq 'amigaos' ? \&TRUE : \&FALSE unless defined &is_amigaos;
 diff --git a/cpan/Pod-Perldoc/lib/Pod/Perldoc/BaseTo.pm b/cpan/Pod-Perldoc/lib/Pod/Perldoc/BaseTo.pm
-index 37f6510..7ae4af5 100644
+index 37f65104..7ae4af58 100644
 --- a/cpan/Pod-Perldoc/lib/Pod/Perldoc/BaseTo.pm
 +++ b/cpan/Pod-Perldoc/lib/Pod/Perldoc/BaseTo.pm
 @@ -29,7 +29,7 @@ BEGIN {
@@ -789,20 +789,20 @@ index 37f6510..7ae4af5 100644
   *is_hpux    = $^O =~ m/hpux/    ? \&TRUE : \&FALSE unless defined &is_hpux;
   *is_openbsd = $^O =~ m/openbsd/ ? \&TRUE : \&FALSE unless defined &is_openbsd;
 diff --git a/cpan/Socket/t/socketpair.t b/cpan/Socket/t/socketpair.t
-index a803302..ac7d78b 100644
+index 701220fe..85230914 100644
 --- a/cpan/Socket/t/socketpair.t
 +++ b/cpan/Socket/t/socketpair.t
 @@ -40,7 +40,7 @@ BEGIN {
- 	    }
- 	    warn "Something unexpectedly hung during testing";
- 	    kill "INT", $parent or die "Kill failed: $!";
--	    if( $^O eq "cygwin" ) {
-+	    if( $^O eq "cygwin" || $^O eq "msys" ) {
- 		# sometimes the above isn't enough on cygwin
- 		sleep 1; # wait a little, it might have worked after all
- 		system( "/bin/kill -f $parent; echo die $parent" );
+             }
+             warn "Something unexpectedly hung during testing";
+             kill "INT", $parent or die "Kill failed: $!";
+-            if( $^O eq "cygwin" ) {
++            if( $^O eq "cygwin" || $^O eq "msys" ) {
+                 # sometimes the above isn't enough on cygwin
+                 sleep 1; # wait a little, it might have worked after all
+                 system( "/bin/kill -f $parent; echo die $parent" );
 diff --git a/cpan/Sys-Syslog/t/syslog.t b/cpan/Sys-Syslog/t/syslog.t
-index 6802ace..89efba5 100644
+index 6802ace6..89efba5b 100644
 --- a/cpan/Sys-Syslog/t/syslog.t
 +++ b/cpan/Sys-Syslog/t/syslog.t
 @@ -18,7 +18,7 @@ use warnings qw(closure deprecated exiting glob io misc numeric once overflow
@@ -815,7 +815,7 @@ index 6802ace..89efba5 100644
  # if testing in core, check that the module is at least available
  if ($ENV{PERL_CORE}) {
 diff --git a/cpan/Sys-Syslog/win32/Win32.pm b/cpan/Sys-Syslog/win32/Win32.pm
-index 70caf33..d589aa1 100644
+index 70caf331..d589aa12 100644
 --- a/cpan/Sys-Syslog/win32/Win32.pm
 +++ b/cpan/Sys-Syslog/win32/Win32.pm
 @@ -39,7 +39,7 @@ use Win32::TieRegistry 0.20 (
@@ -828,7 +828,7 @@ index 70caf33..d589aa1 100644
  
  my %const = (
 diff --git a/cpan/Sys-Syslog/win32/compile.pl b/cpan/Sys-Syslog/win32/compile.pl
-index 3a8cf4f..8e9cd52 100644
+index 3a8cf4fb..8e9cd52c 100644
 --- a/cpan/Sys-Syslog/win32/compile.pl
 +++ b/cpan/Sys-Syslog/win32/compile.pl
 @@ -127,7 +127,7 @@ use Win32::TieRegistry 0.20 (
@@ -841,7 +841,7 @@ index 3a8cf4f..8e9cd52 100644
  
  my %const = (
 diff --git a/cpan/Win32/Makefile.PL b/cpan/Win32/Makefile.PL
-index 90ad660..f11de75 100644
+index 90ad6601..f11de75c 100644
 --- a/cpan/Win32/Makefile.PL
 +++ b/cpan/Win32/Makefile.PL
 @@ -3,7 +3,7 @@ use strict;
@@ -864,7 +864,7 @@ index 90ad660..f11de75 100644
      $param{LIBS} = ['-luserenv -lwinhttp']
  }
 diff --git a/cpan/Win32/t/GetCurrentThreadId.t b/cpan/Win32/t/GetCurrentThreadId.t
-index ce98f3e..aa0720c 100644
+index ce98f3e5..aa0720c4 100644
 --- a/cpan/Win32/t/GetCurrentThreadId.t
 +++ b/cpan/Win32/t/GetCurrentThreadId.t
 @@ -10,7 +10,7 @@ plan tests => $tests;
@@ -877,7 +877,7 @@ index ce98f3e..aa0720c 100644
  	 Cygwin::pid_to_winpid($pid),
  	 Win32::GetCurrentProcessId());
 diff --git a/cpan/Win32/t/Unicode.t b/cpan/Win32/t/Unicode.t
-index fa05188..c0f854d 100644
+index fa05188e..c0f854d4 100644
 --- a/cpan/Win32/t/Unicode.t
 +++ b/cpan/Win32/t/Unicode.t
 @@ -47,7 +47,7 @@ sub cleanup {
@@ -912,7 +912,7 @@ index fa05188..c0f854d 100644
 +    ok(Win32::GetLongPathName(Win32::GetCwd()), $long);
 +}
 diff --git a/cpan/Win32API-File/File.pm b/cpan/Win32API-File/File.pm
-index 804a7f6..504cb1e 100644
+index 804a7f6e..504cb1eb 100644
 --- a/cpan/Win32API-File/File.pm
 +++ b/cpan/Win32API-File/File.pm
 @@ -738,7 +738,7 @@ sub FILENO {
@@ -925,7 +925,7 @@ index 804a7f6..504cb1e 100644
  # FIXME: We don't always open the handle, better to query the handle or to set
  # the right access info at TIEHANDLE time.
 diff --git a/cpan/Win32API-File/Makefile.PL b/cpan/Win32API-File/Makefile.PL
-index b0a0dc0..8e0894d 100644
+index b0a0dc04..8e0894de 100644
 --- a/cpan/Win32API-File/Makefile.PL
 +++ b/cpan/Win32API-File/Makefile.PL
 @@ -5,7 +5,7 @@ use Config;
@@ -938,7 +938,7 @@ index b0a0dc0..8e0894d 100644
  }
  
 diff --git a/cpan/Win32API-File/t/file.t b/cpan/Win32API-File/t/file.t
-index 25450a5..119b69a 100644
+index 25450a5c..119b69af 100644
 --- a/cpan/Win32API-File/t/file.t
 +++ b/cpan/Win32API-File/t/file.t
 @@ -151,7 +151,7 @@ $ok= print APP "is enough\n";
@@ -978,12 +978,12 @@ index 25450a5..119b69a 100644
  print $ok ? "" : "not ", "ok ", ++$test, "\n";	# ok 50
  
 diff --git a/cpan/autodie/t/chown.t b/cpan/autodie/t/chown.t
-index 90c4d3b..7d118d4 100644
+index d4425ac3..4c4bad41 100644
 --- a/cpan/autodie/t/chown.t
 +++ b/cpan/autodie/t/chown.t
-@@ -4,7 +4,7 @@ use Test::More;
- use constant NO_SUCH_FILE => "this_file_had_better_not_exist";
+@@ -5,7 +5,7 @@ use constant NO_SUCH_FILE => "this_file_had_better_not_exist";
  use autodie;
+ use File::Temp qw(tempfile);
  
 -if ($^O eq 'MSWin32') {
 +if ($^O eq 'MSWin32' or $^O eq 'msys') {
@@ -991,7 +991,7 @@ index 90c4d3b..7d118d4 100644
  }
  
 diff --git a/cpan/autodie/t/version_tag.t b/cpan/autodie/t/version_tag.t
-index 4860a49..54c9e79 100644
+index 4860a498..54c9e796 100644
 --- a/cpan/autodie/t/version_tag.t
 +++ b/cpan/autodie/t/version_tag.t
 @@ -63,7 +63,7 @@ is($@,"","chown wasn't supported in 2.13");
@@ -1004,7 +1004,7 @@ index 4860a49..54c9e79 100644
      eval {
          use autodie;
 diff --git a/cpan/libnet/lib/Net/Domain.pm b/cpan/libnet/lib/Net/Domain.pm
-index 7c017f2..19f5695 100644
+index bf1ad254..6c39914e 100644
 --- a/cpan/libnet/lib/Net/Domain.pm
 +++ b/cpan/libnet/lib/Net/Domain.pm
 @@ -171,7 +171,7 @@ sub _hostdomain {
@@ -1017,7 +1017,7 @@ index 7c017f2..19f5695 100644
      if (defined $dom) {
        my @h = ();
 diff --git a/cpan/libnet/lib/Net/Netrc.pm b/cpan/libnet/lib/Net/Netrc.pm
-index 3dec11e..7040f50 100644
+index fe9abb9d..b8a775e7 100644
 --- a/cpan/libnet/lib/Net/Netrc.pm
 +++ b/cpan/libnet/lib/Net/Netrc.pm
 @@ -57,6 +57,7 @@ sub _readrc {
@@ -1029,7 +1029,7 @@ index 3dec11e..7040f50 100644
    {
      my @stat = stat($file);
 diff --git a/cpan/libnet/t/netrc.t b/cpan/libnet/t/netrc.t
-index ba0183c..8e7c335 100644
+index ba0183c1..8e7c3355 100644
 --- a/cpan/libnet/t/netrc.t
 +++ b/cpan/libnet/t/netrc.t
 @@ -48,7 +48,7 @@ $Net::Netrc::TESTING=$Net::Netrc::TESTING=1;
@@ -1043,7 +1043,7 @@ index ba0183c..8e7c335 100644
          local $SIG{__WARN__} = sub {
 diff --git a/dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/msys.pm b/dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/msys.pm
 new file mode 100644
-index 0000000..dd060cd
+index 00000000..dd060cde
 --- /dev/null
 +++ b/dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/msys.pm
 @@ -0,0 +1,33 @@
@@ -1081,7 +1081,7 @@ index 0000000..dd060cd
 +
 +1;
 diff --git a/dist/IO/t/cachepropagate-unix.t b/dist/IO/t/cachepropagate-unix.t
-index 718d01d..df1f3ad 100644
+index 718d01da..df1f3adf 100644
 --- a/dist/IO/t/cachepropagate-unix.t
 +++ b/dist/IO/t/cachepropagate-unix.t
 @@ -50,7 +50,7 @@ my $p = $listener->protocol();
@@ -1103,7 +1103,7 @@ index 718d01d..df1f3ad 100644
      }
      $d = $listener->sockdomain();
 diff --git a/dist/IO/t/io_xs.t b/dist/IO/t/io_xs.t
-index c9b8836..e21e9d3 100644
+index 75d418b3..2b72eac2 100644
 --- a/dist/IO/t/io_xs.t
 +++ b/dist/IO/t/io_xs.t
 @@ -52,6 +52,8 @@ SKIP:
@@ -1116,7 +1116,7 @@ index c9b8836..e21e9d3 100644
        and skip "fsync() not allowed on a read-only handle on $^O", 1;
      open my $fh, "<", "t/io_xs.t"
 diff --git a/dist/Net-Ping/lib/Net/Ping.pm b/dist/Net-Ping/lib/Net/Ping.pm
-index 19bb51e..ef10b04 100644
+index b4c8f2f8..a3c2736a 100644
 --- a/dist/Net-Ping/lib/Net/Ping.pm
 +++ b/dist/Net-Ping/lib/Net/Ping.pm
 @@ -420,15 +420,15 @@ sub retrans
@@ -1147,7 +1147,7 @@ index 19bb51e..ef10b04 100644
  
              $ret = 1 if (!$self->{econnrefused}
                           && $! == ECONNREFUSED);
-@@ -1616,7 +1616,7 @@ sub ack
+@@ -1615,7 +1615,7 @@ sub ack
              $self->{bad}->{$entry->[0]} = $!;
              if (!$self->{econnrefused} &&
                  (($! == ECONNREFUSED) ||
@@ -1157,7 +1157,7 @@ index 19bb51e..ef10b04 100644
                # Good, continue
              } else {
 diff --git a/dist/Net-Ping/t/001_new.t b/dist/Net-Ping/t/001_new.t
-index 46965b7..4703a14 100644
+index 46965b7b..4703a148 100644
 --- a/dist/Net-Ping/t/001_new.t
 +++ b/dist/Net-Ping/t/001_new.t
 @@ -60,7 +60,7 @@ SKIP: {
@@ -1170,7 +1170,7 @@ index 46965b7..4703a14 100644
          skip "icmp tests require root", 2;
      } else {
 diff --git a/dist/Net-Ping/t/450_service.t b/dist/Net-Ping/t/450_service.t
-index 203d86b..9246a21 100644
+index 8bfd91ef..32b3c8c4 100644
 --- a/dist/Net-Ping/t/450_service.t
 +++ b/dist/Net-Ping/t/450_service.t
 @@ -78,7 +78,7 @@ is($p->ping("127.0.0.1"), 1, 'first port is reachable');
@@ -1192,7 +1192,7 @@ index 203d86b..9246a21 100644
    }
  }
 diff --git a/dist/Net-Ping/t/510_ping_udp.t b/dist/Net-Ping/t/510_ping_udp.t
-index 9454736..1756060 100644
+index 94547363..1756060f 100644
 --- a/dist/Net-Ping/t/510_ping_udp.t
 +++ b/dist/Net-Ping/t/510_ping_udp.t
 @@ -4,7 +4,7 @@ use strict;
@@ -1205,7 +1205,7 @@ index 9454736..1756060 100644
     return unless defined &Win32::GetOSVersion();
  
 diff --git a/dist/PathTools/Cwd.pm b/dist/PathTools/Cwd.pm
-index 0683583..68b11b6 100644
+index 90013c9c..a02bb195 100644
 --- a/dist/PathTools/Cwd.pm
 +++ b/dist/PathTools/Cwd.pm
 @@ -135,6 +135,15 @@ my %METHOD_MAP =
@@ -1224,7 +1224,7 @@ index 0683583..68b11b6 100644
     amigaos =>
     {
      getcwd              => '_backtick_pwd',
-@@ -217,7 +226,7 @@ unless ($METHOD_MAP{$^O}{cwd} or defined &cwd) {
+@@ -223,7 +232,7 @@ unless ($METHOD_MAP{$^O}{cwd} or defined &cwd) {
      }
  }
  
@@ -1233,7 +1233,7 @@ index 0683583..68b11b6 100644
    # We need to make sure cwd() is called with no args, because it's
    # got an arg-less prototype and will die if args are present.
    local $^W = 0;
-@@ -318,7 +327,7 @@ sub chdir_init {
+@@ -324,7 +333,7 @@ sub chdir_init {
  
  sub chdir {
      my $newdir = @_ ? shift : '';	# allow for no arg (chdir to HOME dir)
@@ -1243,7 +1243,7 @@ index 0683583..68b11b6 100644
        $newdir =~ s|(?<=[^/])//+|/|g;
      }
 diff --git a/dist/PathTools/lib/File/Spec.pm b/dist/PathTools/lib/File/Spec.pm
-index e0a49ed..df03121 100644
+index b2349be3..2c5e0f8d 100644
 --- a/dist/PathTools/lib/File/Spec.pm
 +++ b/dist/PathTools/lib/File/Spec.pm
 @@ -13,6 +13,7 @@ my %module = (
@@ -1255,7 +1255,7 @@ index e0a49ed..df03121 100644
  
  
 diff --git a/dist/PathTools/lib/File/Spec/Cygwin.pm b/dist/PathTools/lib/File/Spec/Cygwin.pm
-index e21c0bb..427ce03 100644
+index ef1c9ec8..8042c078 100644
 --- a/dist/PathTools/lib/File/Spec/Cygwin.pm
 +++ b/dist/PathTools/lib/File/Spec/Cygwin.pm
 @@ -117,12 +117,12 @@ Default: 1
@@ -1274,7 +1274,7 @@ index e21c0bb..427ce03 100644
        if (! $prefix || $prefix eq 'cygdrive') {
            $drive = '/cygdrive/c';
 diff --git a/dist/PathTools/lib/File/Spec/Unix.pm b/dist/PathTools/lib/File/Spec/Unix.pm
-index 52904b4..e771c5f 100644
+index dbe36fb5..9298c657 100644
 --- a/dist/PathTools/lib/File/Spec/Unix.pm
 +++ b/dist/PathTools/lib/File/Spec/Unix.pm
 @@ -57,7 +57,7 @@ sub _pp_canonpath {
@@ -1287,7 +1287,7 @@ index 52904b4..e771c5f 100644
      # (Mainly because trailing "" directories didn't get stripped).
      # Why would cygwin avoid collapsing multiple slashes into one? --jhi
 diff --git a/dist/PathTools/t/crossplatform.t b/dist/PathTools/t/crossplatform.t
-index b7c76fc..6a42af3 100644
+index b7c76fc1..6a42af31 100644
 --- a/dist/PathTools/t/crossplatform.t
 +++ b/dist/PathTools/t/crossplatform.t
 @@ -6,7 +6,7 @@ use lib File::Spec->catfile('t', 'lib');
@@ -1300,7 +1300,7 @@ index b7c76fc..6a42af3 100644
  
  my $vms_unix_rpt = 0;
 diff --git a/dist/PathTools/t/cwd.t b/dist/PathTools/t/cwd.t
-index d155e33..ebdd7f2 100644
+index d155e332..ebdd7f2c 100644
 --- a/dist/PathTools/t/cwd.t
 +++ b/dist/PathTools/t/cwd.t
 @@ -41,7 +41,7 @@ if ($IsVMS) {
@@ -1313,7 +1313,7 @@ index d155e33..ebdd7f2 100644
  plan tests => $tests;
  
 diff --git a/dist/PathTools/t/cwd_enoent.t b/dist/PathTools/t/cwd_enoent.t
-index 0fe3834..32c2b7d 100644
+index 05b30b37..fb8016ea 100644
 --- a/dist/PathTools/t/cwd_enoent.t
 +++ b/dist/PathTools/t/cwd_enoent.t
 @@ -6,7 +6,7 @@ use Errno qw();
@@ -1335,7 +1335,7 @@ index 0fe3834..32c2b7d 100644
          # https://github.com/Perl/perl5/issues/16525
          # https://bugs.dragonflybsd.org/issues/3250
 diff --git a/dist/Storable/stacksize b/dist/Storable/stacksize
-index 2896684..c9247bf 100644
+index 28966844..c9247bf1 100644
 --- a/dist/Storable/stacksize
 +++ b/dist/Storable/stacksize
 @@ -168,7 +168,7 @@ $max_depth = int(0.6 * $max_depth);
@@ -1348,7 +1348,7 @@ index 2896684..c9247bf 100644
      $max_depth_hash -= $stack_reserve;
  }
 diff --git a/dist/Term-ReadLine/t/ReadLine-STDERR.t b/dist/Term-ReadLine/t/ReadLine-STDERR.t
-index 2bdf799..3637dc0 100644
+index 2bdf799f..3637dc0c 100644
 --- a/dist/Term-ReadLine/t/ReadLine-STDERR.t
 +++ b/dist/Term-ReadLine/t/ReadLine-STDERR.t
 @@ -30,7 +30,7 @@ SKIP:
@@ -1369,7 +1369,7 @@ index 2bdf799..3637dc0 100644
      is_deeply \@out, [ q{&STDIN}, q{&STDERR} ], "findConsole isn't using /dev/tty" or diag explain \@out;
  
 diff --git a/dist/Time-HiRes/Makefile.PL b/dist/Time-HiRes/Makefile.PL
-index e5ba503..97b5903 100644
+index ac56d8df..9814d9ed 100644
 --- a/dist/Time-HiRes/Makefile.PL
 +++ b/dist/Time-HiRes/Makefile.PL
 @@ -23,7 +23,7 @@ our $self; # Used in 'sourcing' the hints.
@@ -1381,7 +1381,7 @@ index e5ba503..97b5903 100644
                   $^O eq 'os2' && $Config{ldflags} =~ /-Zexe\b/) ? '.exe' :
                  (($^O eq 'vos') ? $Config{exe_ext} : '');
  
-@@ -829,7 +829,7 @@ EOM
+@@ -838,7 +838,7 @@ EOM
  
      my $has_w32api_windows_h;
  
@@ -1391,7 +1391,7 @@ index e5ba503..97b5903 100644
          if (has_include('w32api/windows.h')) {
              $has_w32api_windows_h++;
 diff --git a/dist/Time-HiRes/t/stat.t b/dist/Time-HiRes/t/stat.t
-index 1f1fa96..4f33e37 100644
+index 2f72fdc2..d4dd876c 100644
 --- a/dist/Time-HiRes/t/stat.t
 +++ b/dist/Time-HiRes/t/stat.t
 @@ -6,7 +6,7 @@ BEGIN {
@@ -1404,7 +1404,7 @@ index 1f1fa96..4f33e37 100644
          Test::More::plan(skip_all =>
                  "$^O file timestamps not reliable enough for stat test");
 diff --git a/dist/Time-HiRes/t/utime.t b/dist/Time-HiRes/t/utime.t
-index 8a4f071..117a6af 100644
+index 8a4f0717..117a6af0 100644
 --- a/dist/Time-HiRes/t/utime.t
 +++ b/dist/Time-HiRes/t/utime.t
 @@ -127,7 +127,7 @@ use Config;
@@ -1417,7 +1417,7 @@ index 8a4f071..117a6af 100644
      $atime = 1.1111111;
      $mtime = 2.2222222;
 diff --git a/dist/XSLoader/XSLoader_pm.PL b/dist/XSLoader/XSLoader_pm.PL
-index af5586a..c31171e 100644
+index ff5ca313..c2142315 100644
 --- a/dist/XSLoader/XSLoader_pm.PL
 +++ b/dist/XSLoader/XSLoader_pm.PL
 @@ -80,7 +80,7 @@ my $to_print = <<'EOT';
@@ -1430,7 +1430,7 @@ index af5586a..c31171e 100644
          : '^/'
  ~e;
 diff --git a/ext/DynaLoader/DynaLoader_pm.PL b/ext/DynaLoader/DynaLoader_pm.PL
-index 93a858a..c881f91 100644
+index 0f13f9aa..d857df8a 100644
 --- a/ext/DynaLoader/DynaLoader_pm.PL
 +++ b/ext/DynaLoader/DynaLoader_pm.PL
 @@ -484,6 +484,9 @@ sub dl_findfile {
@@ -1444,7 +1444,7 @@ index 93a858a..c881f91 100644
              push(@names, $_);
          }
 diff --git a/ext/DynaLoader/t/DynaLoader.t b/ext/DynaLoader/t/DynaLoader.t
-index 11b37b5..6b6287f 100644
+index 11b37b5c..6b6287f1 100644
 --- a/ext/DynaLoader/t/DynaLoader.t
 +++ b/ext/DynaLoader/t/DynaLoader.t
 @@ -119,7 +119,7 @@ SKIP: {
@@ -1457,7 +1457,7 @@ index 11b37b5..6b6287f 100644
      # looks pretty much Unix-like.
      skip( "dl_findfile test not appropriate on $^O", 1 )
 diff --git a/ext/File-Find/t/find.t b/ext/File-Find/t/find.t
-index add20c2..1a50632 100644
+index 64392a7e..5a96bd9f 100644
 --- a/ext/File-Find/t/find.t
 +++ b/ext/File-Find/t/find.t
 @@ -12,7 +12,7 @@ BEGIN {
@@ -1470,10 +1470,10 @@ index add20c2..1a50632 100644
          # on Win32 or VMS, so force File::Spec to use Unix names.
          # must be set *before* importing File::Find
 diff --git a/ext/File-Glob/t/basic.t b/ext/File-Glob/t/basic.t
-index 412fe7e..3c59e42 100644
+index b6bca0bc..5bb76331 100644
 --- a/ext/File-Glob/t/basic.t
 +++ b/ext/File-Glob/t/basic.t
-@@ -141,7 +141,7 @@ SKIP: {
+@@ -164,7 +164,7 @@ SKIP: {
  # should return an empty list, and set ERROR
  SKIP: {
      skip $^O, 2 if $^O eq 'MSWin32'
@@ -1483,7 +1483,7 @@ index 412fe7e..3c59e42 100644
      skip "running as root", 2 if not $>;
  
 diff --git a/ext/NDBM_File/Makefile.PL b/ext/NDBM_File/Makefile.PL
-index fe2cb40..85e6f30 100644
+index fe2cb407..85e6f301 100644
 --- a/ext/NDBM_File/Makefile.PL
 +++ b/ext/NDBM_File/Makefile.PL
 @@ -1,7 +1,7 @@
@@ -1496,7 +1496,7 @@ index fe2cb40..85e6f30 100644
      VERSION_FROM => 'NDBM_File.pm',
  );
 diff --git a/ext/ODBM_File/Makefile.PL b/ext/ODBM_File/Makefile.PL
-index 0ae31f9..76f8f4f 100644
+index 0ae31f9c..76f8f4fc 100644
 --- a/ext/ODBM_File/Makefile.PL
 +++ b/ext/ODBM_File/Makefile.PL
 @@ -1,7 +1,7 @@
@@ -1509,7 +1509,7 @@ index 0ae31f9..76f8f4f 100644
      VERSION_FROM => 'ODBM_File.pm', 
  );
 diff --git a/ext/POSIX/Makefile.PL b/ext/POSIX/Makefile.PL
-index 462b8ed..1ec91f3 100644
+index cc6011d7..b4b60be9 100644
 --- a/ext/POSIX/Makefile.PL
 +++ b/ext/POSIX/Makefile.PL
 @@ -20,7 +20,7 @@ if ($^O eq 'solaris') {
@@ -1522,7 +1522,7 @@ index 462b8ed..1ec91f3 100644
  }
  WriteMakefile(
 diff --git a/ext/POSIX/t/sysconf.t b/ext/POSIX/t/sysconf.t
-index 8644274..8f15be1 100644
+index 86442744..8f15be13 100644
 --- a/ext/POSIX/t/sysconf.t
 +++ b/ext/POSIX/t/sysconf.t
 @@ -164,7 +164,7 @@ END {
@@ -1535,12 +1535,12 @@ index 8644274..8f15be1 100644
          skip("No _SC_TZNAME_MAX on Cygwin", 1);
      }
 diff --git a/ext/POSIX/t/time.t b/ext/POSIX/t/time.t
-index 6190e38..f85182a 100644
+index 44cba606..491efc2f 100644
 --- a/ext/POSIX/t/time.t
 +++ b/ext/POSIX/t/time.t
-@@ -22,7 +22,7 @@ SKIP: {
-     # actually do anything.  Cygwin works in some places, but not others.  The
-     # other Win32's below are guesses.
+@@ -43,7 +43,7 @@ $ENV{TZ} = "UTC0UTC";
+ 
+ SKIP: {
      skip "No tzset()", 2
 -       if $^O eq "VMS" || $^O eq "cygwin" ||
 +       if $^O eq "VMS" || $^O eq "cygwin" || $^O eq "msys" ||
@@ -1548,7 +1548,7 @@ index 6190e38..f85182a 100644
      tzset();
      my @tzname = tzname();
 diff --git a/ext/POSIX/t/wrappers.t b/ext/POSIX/t/wrappers.t
-index e41b319..b26b203 100644
+index 76d4a08e..4286d351 100644
 --- a/ext/POSIX/t/wrappers.t
 +++ b/ext/POSIX/t/wrappers.t
 @@ -179,7 +179,9 @@ foreach ([undef, 0, 'chdir', NOT_HERE],
@@ -1562,7 +1562,7 @@ index e41b319..b26b203 100644
  	is(&$func(@args), $expect, $name);
  	isnt($!, '', "$name reported an error");
 diff --git a/ext/Win32CORE/t/win32core.t b/ext/Win32CORE/t/win32core.t
-index 8ef8cd0..ad0d7f0 100644
+index 8ef8cd0a..ad0d7f0b 100644
 --- a/ext/Win32CORE/t/win32core.t
 +++ b/ext/Win32CORE/t/win32core.t
 @@ -24,8 +24,8 @@ ok(eval { Win32::GetLastError(); 1 }, 'GetLastError() works on the first call');
@@ -1577,7 +1577,7 @@ index 8ef8cd0..ad0d7f0 100644
      # should not affect the last error being retrieved
      is($sys_errno, 42, '$^E is preserved across Win32 autoload');
 diff --git a/ext/XS-APItest/t/call_checker.t b/ext/XS-APItest/t/call_checker.t
-index d39a059..919cdc0 100644
+index d39a059c..919cdc0e 100644
 --- a/ext/XS-APItest/t/call_checker.t
 +++ b/ext/XS-APItest/t/call_checker.t
 @@ -6,7 +6,7 @@ use XS::APItest;
@@ -1590,7 +1590,7 @@ index d39a059..919cdc0 100644
          "test_cv_getset_call_checker() works as expected")
          or diag $@;
 diff --git a/haiku/Haiku/Makefile.PL b/haiku/Haiku/Makefile.PL
-index dacf230..fa335a0 100644
+index dacf2302..fa335a07 100644
 --- a/haiku/Haiku/Makefile.PL
 +++ b/haiku/Haiku/Makefile.PL
 @@ -6,7 +6,7 @@ unless ($^O eq "haiku") {
@@ -1604,7 +1604,7 @@ index dacf230..fa335a0 100644
      NAME          => 'Haiku',
 diff --git a/hints/msys.sh b/hints/msys.sh
 new file mode 100644
-index 0000000..4a757e0
+index 00000000..4a757e09
 --- /dev/null
 +++ b/hints/msys.sh
 @@ -0,0 +1,98 @@
@@ -1707,7 +1707,7 @@ index 0000000..4a757e0
 +#ccdlflags="$ccdlflags -s"
 +#lddlflags="$lddlflags -s"
 diff --git a/install_lib.pl b/install_lib.pl
-index 1c4d7de..b7319aa 100644
+index 1c4d7def..b7319aaf 100644
 --- a/install_lib.pl
 +++ b/install_lib.pl
 @@ -46,7 +46,7 @@ if ($Config{d_umask}) {
@@ -1720,7 +1720,7 @@ index 1c4d7de..b7319aa 100644
  $Is_AmigaOS = $^O eq 'amigaos';
  
 diff --git a/installman b/installman
-index 686862d..fcf467c 100755
+index 686862d8..fcf467c1 100755
 --- a/installman
 +++ b/installman
 @@ -154,7 +154,7 @@ sub pod2man {
@@ -1733,7 +1733,7 @@ index 686862d..fcf467c 100755
  	}
          my $tmp = "${mandir}/${manpage}.tmp";
 diff --git a/lib/AnyDBM_File.t b/lib/AnyDBM_File.t
-index 22f262b..f4e2833 100644
+index 22f262bf..f4e2833a 100644
 --- a/lib/AnyDBM_File.t
 +++ b/lib/AnyDBM_File.t
 @@ -14,7 +14,8 @@ use Fcntl;
@@ -1747,10 +1747,10 @@ index 22f262b..f4e2833 100644
  my $filename = "Any_dbmx$$";
  unlink <"$filename*">;
 diff --git a/lib/ExtUtils/t/Embed.t b/lib/ExtUtils/t/Embed.t
-index 51c3ef2..70ebd0c 100644
+index 1057f817..40366f43 100644
 --- a/lib/ExtUtils/t/Embed.t
 +++ b/lib/ExtUtils/t/Embed.t
-@@ -117,7 +117,7 @@ if ($^O eq 'VMS') {
+@@ -119,7 +119,7 @@ if ($^O eq 'VMS') {
          s!-bE:(\S+)!-bE:$perl_exp!;
      }
     }
@@ -1759,7 +1759,7 @@ index 51c3ef2..70ebd0c 100644
         ;
     }
     elsif ($Config{'libperl'} !~ /\Alibperl\./) {
-@@ -160,7 +160,7 @@ unlink($exe,"embed_test.c",$obj);
+@@ -162,7 +162,7 @@ unlink($exe,"embed_test.c",$obj);
  unlink("$exe.manifest") if $cl and $Config{'ccversion'} =~ /^(\d+)/ and $1 >= 14;
  unlink("$exe$Config{exe_ext}") if $skip_exe;
  unlink("embed_test.map","embed_test.lis") if $^O eq 'VMS';
@@ -1769,7 +1769,7 @@ index 51c3ef2..70ebd0c 100644
  
  # gcc -g -I.. -L../ -o perl_test perl_test.c -lperl `../perl -I../lib -MExtUtils::Embed -I../ -e ccflags -e ldopts`
 diff --git a/lib/File/Compare.t b/lib/File/Compare.t
-index 640b181..9bb2bb2 100644
+index 640b1816..9bb2bb24 100644
 --- a/lib/File/Compare.t
 +++ b/lib/File/Compare.t
 @@ -105,7 +105,7 @@ SKIP: {
@@ -1782,7 +1782,7 @@ index 640b181..9bb2bb2 100644
          is($donetests[2], 0, "file/fileCR [$donetests[2]]");
      }
 diff --git a/lib/File/Copy.t b/lib/File/Copy.t
-index 57b86c1..d45e450 100644
+index 57b86c1c..d45e4506 100644
 --- a/lib/File/Copy.t
 +++ b/lib/File/Copy.t
 @@ -181,7 +181,7 @@ for my $cross_partition_test (0..1) {
@@ -1795,7 +1795,7 @@ index 57b86c1..d45e450 100644
      open(F, ">", "file-$$") or die $!;
      print F "dummy content\n";
 diff --git a/lib/Net/hostent.t b/lib/Net/hostent.t
-index 3ee1980..4f0f44b 100644
+index 3ee19809..4f0f44bf 100644
 --- a/lib/Net/hostent.t
 +++ b/lib/Net/hostent.t
 @@ -65,7 +65,7 @@ ok(defined $i, 'gethost on capture variable');
@@ -1808,7 +1808,7 @@ index 3ee1980..4f0f44b 100644
      print "# name = " . $h->name . ", aliases = " . join (",", @{$h->aliases}) . "\n";
  
 diff --git a/lib/User/grent.t b/lib/User/grent.t
-index 8f34762..54f93c3 100644
+index 8f347626..54f93c37 100644
 --- a/lib/User/grent.t
 +++ b/lib/User/grent.t
 @@ -18,7 +18,7 @@ BEGIN {
@@ -1821,7 +1821,7 @@ index 8f34762..54f93c3 100644
      unless (@grent) { plan skip_all => "no gid 0"; }
  }
 diff --git a/lib/User/pwent.t b/lib/User/pwent.t
-index f93836f..369ce60 100644
+index f93836f7..369ce602 100644
 --- a/lib/User/pwent.t
 +++ b/lib/User/pwent.t
 @@ -21,7 +21,7 @@ BEGIN {
@@ -1843,10 +1843,10 @@ index f93836f..369ce60 100644
                           || $pwent->uid == 500         );  # go figure
  }
 diff --git a/lib/locale.t b/lib/locale.t
-index 9aa8e1d..d88a81e 100644
+index 6fa485e0..abfc0533 100644
 --- a/lib/locale.t
 +++ b/lib/locale.t
-@@ -93,7 +93,7 @@ my %known_bad_locales = (
+@@ -159,7 +159,7 @@ my %known_bad_locales = (
  
  # cygwin isn't returning proper radix length in this locale, but supposedly to
  # be fixed in later versions.
@@ -1856,7 +1856,7 @@ index 9aa8e1d..d88a81e 100644
  }
  
 diff --git a/lib/perl5db.pl b/lib/perl5db.pl
-index 64f7fcb..cd6f6dd 100644
+index 9af8fe49..1cd1dcb5 100644
 --- a/lib/perl5db.pl
 +++ b/lib/perl5db.pl
 @@ -1533,7 +1533,7 @@ We then determine what the console should be on various systems:
@@ -1869,10 +1869,10 @@ index 64f7fcb..cd6f6dd 100644
          # /dev/tty is binary. use stdin for textmode
          undef $console;
 diff --git a/regen/regen_lib.pl b/regen/regen_lib.pl
-index 0eb5654..77ff511 100644
+index a733dbdb..b96ae05f 100644
 --- a/regen/regen_lib.pl
 +++ b/regen/regen_lib.pl
-@@ -7,7 +7,7 @@ use Text::Wrap();
+@@ -8,7 +8,7 @@ use Text::Wrap();
  
  # Common functions needed by the regen scripts
  
@@ -1882,7 +1882,7 @@ index 0eb5654..77ff511 100644
  our $Verbose = 0;
  @ARGV = grep { not($_ eq '-q' and $Verbose = -1) }
 diff --git a/t/io/eintr.t b/t/io/eintr.t
-index 26a4636..fa6a943 100644
+index fd700dda..380e9857 100644
 --- a/t/io/eintr.t
 +++ b/t/io/eintr.t
 @@ -50,7 +50,7 @@ if (exists $ENV{PERLIO} && $ENV{PERLIO} =~ /stdio/  ) {
@@ -1895,7 +1895,7 @@ index 26a4636..fa6a943 100644
       ($^O eq 'darwin' && $osmajmin < 9) ||
      ((int($]*1000) & 1) == 0)
 diff --git a/t/io/fs.t b/t/io/fs.t
-index 9cda3e9..243cb38 100644
+index 9cda3e9a..243cb38c 100644
 --- a/t/io/fs.t
 +++ b/t/io/fs.t
 @@ -39,7 +39,7 @@ my $accurate_timestamps =
@@ -1938,7 +1938,7 @@ index 9cda3e9..243cb38 100644
      chdir "./$tmpdir";
      open(FH,'>x') || die "Can't create x";
 diff --git a/t/io/pvbm.t b/t/io/pvbm.t
-index 2affbac..630de14 100644
+index 2affbaca..630de14e 100644
 --- a/t/io/pvbm.t
 +++ b/t/io/pvbm.t
 @@ -67,7 +67,7 @@ sub PVBM () { 'foo' }
@@ -1951,7 +1951,7 @@ index 2affbac..630de14 100644
          ok (!eval { chown 0, 0, \$pvbm }, 'chown(PVBM ref) fails');
      }
 diff --git a/t/io/tell.t b/t/io/tell.t
-index 3e15663..ba38575 100644
+index 3e156636..ba38575a 100644
 --- a/t/io/tell.t
 +++ b/t/io/tell.t
 @@ -11,7 +11,7 @@ plan(36);
@@ -1973,7 +1973,7 @@ index 3e15663..ba38575 100644
    }
    elsif ($^O eq "vos") {
 diff --git a/t/lib/cygwin.t b/t/lib/cygwin.t
-index ba86170..0d316f3 100644
+index ba861701..0d316f36 100644
 --- a/t/lib/cygwin.t
 +++ b/t/lib/cygwin.t
 @@ -4,7 +4,7 @@ BEGIN {
@@ -1995,7 +1995,7 @@ index ba86170..0d316f3 100644
  is(Cygwin::is_binmount("/"),  $binmode ? 1 : '', "check / for binmount");
  
 diff --git a/t/lib/dbmt_common.pl b/t/lib/dbmt_common.pl
-index f8fbbb0..880a736 100644
+index b7ea08cc..891c3c25 100644
 --- a/t/lib/dbmt_common.pl
 +++ b/t/lib/dbmt_common.pl
 @@ -43,7 +43,7 @@ if (! -e $Dfile) {
@@ -2008,7 +2008,7 @@ index f8fbbb0..880a736 100644
  	$blksize,$blocks) = stat($Dfile);
      is($mode & 0777, 0640);
 diff --git a/t/op/groups.t b/t/op/groups.t
-index 65b5c05..8088885 100644
+index 65b5c05d..80888850 100644
 --- a/t/op/groups.t
 +++ b/t/op/groups.t
 @@ -310,7 +310,7 @@ sub darwin {
@@ -2021,7 +2021,7 @@ index 65b5c05..8088885 100644
  
  # Get perl's supplementary groups and the number of times each gid
 diff --git a/t/op/magic.t b/t/op/magic.t
-index 2004a50..7d42494 100644
+index 49e39b7c..996a3632 100644
 --- a/t/op/magic.t
 +++ b/t/op/magic.t
 @@ -52,7 +52,7 @@ use Config;
@@ -2034,10 +2034,10 @@ index 2004a50..7d42494 100644
  $PERL =
     ($Is_VMS     ? $^X      :
 diff --git a/t/op/require_errors.t b/t/op/require_errors.t
-index 637457b..5aa250b 100644
+index 2d7c587e..2b058d3b 100644
 --- a/t/op/require_errors.t
 +++ b/t/op/require_errors.t
-@@ -167,11 +167,12 @@ chmod 0333, $mod_file;
+@@ -173,11 +173,12 @@ chmod 0333, $mod_file;
  
  SKIP: {
      skip_if_miniperl("these modules may not be available to miniperl", 2);
@@ -2052,7 +2052,7 @@ index 637457b..5aa250b 100644
      }
  
 diff --git a/t/op/sigdispatch.t b/t/op/sigdispatch.t
-index 242fb8e..df6c933 100644
+index 242fb8ec..df6c9337 100644
 --- a/t/op/sigdispatch.t
 +++ b/t/op/sigdispatch.t
 @@ -44,7 +44,7 @@ SKIP: {
@@ -2083,7 +2083,7 @@ index 242fb8e..df6c933 100644
      # make sure the signal handler's called in an eval block *before*
      # the eval is popped
 diff --git a/t/op/stat.t b/t/op/stat.t
-index b391dd0..03c5484 100644
+index b391dd0e..03c54846 100644
 --- a/t/op/stat.t
 +++ b/t/op/stat.t
 @@ -37,7 +37,7 @@ $ENV{LC_ALL}   = 'C';		# Forge English error messages.
@@ -2133,7 +2133,7 @@ index b391dd0..03c5484 100644
  	-T _;
  	ok(eval { lstat _ },
 diff --git a/t/op/taint.t b/t/op/taint.t
-index f4f06f7..7cba8ca 100644
+index daeb164e..54629704 100644
 --- a/t/op/taint.t
 +++ b/t/op/taint.t
 @@ -52,7 +52,7 @@ BEGIN {
@@ -2146,7 +2146,7 @@ index f4f06f7..7cba8ca 100644
  my $Is_MirBSD   = $^O eq 'mirbsd';
  my $Invoke_Perl = $Is_VMS      ? 'MCR Sys$Disk:[]Perl.exe' :
 diff --git a/t/op/time.t b/t/op/time.t
-index 9fdc7b8..da593a1 100644
+index 9fdc7b8c..da593a16 100644
 --- a/t/op/time.t
 +++ b/t/op/time.t
 @@ -50,7 +50,7 @@ ok(localtime() =~ /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)[ ]
@@ -2159,7 +2159,7 @@ index 9fdc7b8..da593a1 100644
             $^O eq "interix";
  
 diff --git a/t/porting/exec-bit.t b/t/porting/exec-bit.t
-index 3e80f84..38174a4 100644
+index 3e80f844..38174a46 100644
 --- a/t/porting/exec-bit.t
 +++ b/t/porting/exec-bit.t
 @@ -18,7 +18,7 @@ sub has_shebang {
@@ -2172,7 +2172,7 @@ index 3e80f84..38174a4 100644
  }
  
 diff --git a/t/porting/extrefs.t b/t/porting/extrefs.t
-index d898b49..3f7eeb4 100644
+index b020ac51..9998ff5d 100644
 --- a/t/porting/extrefs.t
 +++ b/t/porting/extrefs.t
 @@ -48,7 +48,7 @@ CODE
@@ -2185,7 +2185,7 @@ index d898b49..3f7eeb4 100644
                  (($^O eq 'vos') ? $Config{exe_ext} : '');
  
 diff --git a/t/porting/globvar.t b/t/porting/globvar.t
-index 3e6d630..b4a9941 100644
+index aaf285ad..d20b504d 100644
 --- a/t/porting/globvar.t
 +++ b/t/porting/globvar.t
 @@ -15,7 +15,7 @@ my %skip = map { ("PL_$_", 1) }
@@ -2198,10 +2198,10 @@ index 3e6d630..b4a9941 100644
  
  $skip{PL_hash_rand_bits}= $skip{PL_hash_rand_bits_enabled}= 1; # we can be compiled without these, so skip testing them
 diff --git a/t/run/locale.t b/t/run/locale.t
-index 202f355..981b9e4 100644
+index 11f97f14..0ed49a11 100644
 --- a/t/run/locale.t
 +++ b/t/run/locale.t
-@@ -85,7 +85,7 @@ if ($non_C_locale) {
+@@ -92,7 +92,7 @@ if ($non_C_locale) {
  
      # Skip this locale on these cygwin versions as the returned radix character
      # length is wrong
@@ -2211,10 +2211,10 @@ index 202f355..981b9e4 100644
      {
          @test_numeric_locales = grep { $_ !~ m/ps_AF/i } @test_numeric_locales;
 diff --git a/t/test.pl b/t/test.pl
-index d92f28f..d81c4bf 100644
+index 1f8176c7..c4bcba68 100644
 --- a/t/test.pl
 +++ b/t/test.pl
-@@ -630,7 +630,7 @@ USE_OK
+@@ -694,7 +694,7 @@ USE_OK
  
  my $is_mswin    = $^O eq 'MSWin32';
  my $is_vms      = $^O eq 'VMS';
@@ -2224,7 +2224,7 @@ index d92f28f..d81c4bf 100644
  sub _quote_args {
      my ($runperl, $args) = @_;
 diff --git a/utils/perlbug.PL b/utils/perlbug.PL
-index 4715e9d..5da0af0 100644
+index 44481609..eff4d41b 100644
 --- a/utils/perlbug.PL
 +++ b/utils/perlbug.PL
 @@ -76,7 +76,7 @@ BEGIN {
@@ -2236,7 +2236,7 @@ index 4715e9d..5da0af0 100644
      # use secure tempfiles wherever possible
      eval { require File::Temp; };
      $::HaveTemp = ($@ eq "");
-@@ -727,7 +727,7 @@ EOF
+@@ -748,7 +748,7 @@ EOF
      my @env =
          qw(PATH LD_LIBRARY_PATH LANG PERL_BADLANG SHELL HOME LOGDIR LANGUAGE);
      push @env, $Config{ldlibpthname} if $Config{ldlibpthname} ne '';
@@ -2246,7 +2246,7 @@ index 4715e9d..5da0af0 100644
      @env{@env} = @env;
      for my $env (sort keys %env) {
 diff --git a/win32/FindExt.pm b/win32/FindExt.pm
-index 4d46821..210047e 100644
+index 4d468217..210047ea 100644
 --- a/win32/FindExt.pm
 +++ b/win32/FindExt.pm
 @@ -24,7 +24,7 @@ sub apply_config {
@@ -2258,6 +2258,3 @@ index 4d46821..210047e 100644
  
      $no = join('|', @no);
      $no = qr/^(?:$no)$/i;
--- 
-2.37.1
-

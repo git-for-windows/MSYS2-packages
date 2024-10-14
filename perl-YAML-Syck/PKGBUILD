@@ -3,7 +3,7 @@
 _realname=YAML-Syck
 pkgname=perl-YAML-Syck
 pkgver=1.34
-pkgrel=3
+pkgrel=4
 pkgdesc="Fast, lightweight YAML loader and dumper"
 arch=('i686' 'x86_64')
 url="http://search.cpan.org/dist/YAML-Syck/"
