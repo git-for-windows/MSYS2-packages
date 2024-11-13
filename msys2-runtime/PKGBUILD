@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.5.4
-pkgrel=3
+pkgrel=4
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -79,9 +79,10 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0050-Cygwin-pipe-Fix-a-regression-that-raw_write-slows-do.patch
         0051-Cygwin-pipe-Restore-blocking-mode-of-read-pipe-on-cl.patch
         0052-Fix-SSH-hangs.patch
-        0053-Cygwin-find_fast_cwd-don-t-run-assembler-checking-co.patch)
+        0053-Cygwin-find_fast_cwd-don-t-run-assembler-checking-co.patch
+        0054-cygthread-suspend-thread-before-terminating.patch)
 sha256sums=('3812485e2a6ab8360e5b9d566a47b982852ff2b140cea4e332ded19c11c77663'
-            '490f290676fc38e51b5084ed7061c1abb70a462bf3067941b01a52e60662aecc'
+            'a1ccf0cab1544eb266caa467817c2d525fe48bc47247c4302b81f46aaada9677'
             '9f9e1b6b05cbc9a715fe9443740b25171e9c1a276a058e6ba7e4f6eada6872c8'
             'e5b2095e543a5d702cfce6da26cd17a78f40e17620315b1bcc434b94a007ae9b'
             'f13b15dc14aa6ee1dd628a2487564bb484e74ff2f3e4059b9d9d64446a327db1'
@@ -134,7 +135,8 @@ sha256sums=('3812485e2a6ab8360e5b9d566a47b982852ff2b140cea4e332ded19c11c77663'
             '394229cfa5293e4572dfd7155605343ca7426395429fa47eb38aced11d4f924b'
             '590dc0ce9e72a1adf1424c7a4f55bd57d8955eef036776895b3d779d4932d4ce'
             '75e22e453011ea15c6cf6b6904c33256530d6f4ba273f03bc6a37d9245064c8c'
-            '7fe562197a1f3b67b1e794808186c10ff0186b0fcf8d09a8021499b952d04d2c')
+            '7fe562197a1f3b67b1e794808186c10ff0186b0fcf8d09a8021499b952d04d2c'
+            '5ee3136a522cff35da3dd7cf7280f87bc855083832cc5cc3a5d24ea996c9d04c')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -241,7 +243,8 @@ prepare() {
   0050-Cygwin-pipe-Fix-a-regression-that-raw_write-slows-do.patch \
   0051-Cygwin-pipe-Restore-blocking-mode-of-read-pipe-on-cl.patch \
   0052-Fix-SSH-hangs.patch \
-  0053-Cygwin-find_fast_cwd-don-t-run-assembler-checking-co.patch
+  0053-Cygwin-find_fast_cwd-don-t-run-assembler-checking-co.patch \
+  0054-cygthread-suspend-thread-before-terminating.patch
 }
 
 build() {
