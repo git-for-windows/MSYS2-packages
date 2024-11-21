@@ -1,4 +1,4 @@
-From 95d30af67bcbe14a0755e24c85400affc01eac20 Mon Sep 17 00:00:00 2001
+From 86679f5ef9b492a1709019d26aeac5e64125200d Mon Sep 17 00:00:00 2001
 From: Alexey Pavlov <alexpux@gmail.com>
 Date: Thu, 28 Jun 2018 11:41:32 +0300
 Subject: [PATCH 5/7] perl.cygwin-Win32
@@ -9,7 +9,7 @@ Subject: [PATCH 5/7] perl.cygwin-Win32
  2 files changed, 22 insertions(+), 18 deletions(-)
 
 diff --git a/cpan/Win32/t/GetShortPathName.t b/cpan/Win32/t/GetShortPathName.t
-index 649420a..82ce2d5 100644
+index 649420ab..82ce2d53 100644
 --- a/cpan/Win32/t/GetShortPathName.t
 +++ b/cpan/Win32/t/GetShortPathName.t
 @@ -12,18 +12,21 @@ BEGIN {
@@ -38,7 +38,7 @@ index 649420a..82ce2d5 100644
  unlink($path);
  ok(!-f $path);
 diff --git a/cpan/Win32/t/Unicode.t b/cpan/Win32/t/Unicode.t
-index c1380e8..fa05188 100644
+index c1380e87..fa05188e 100644
 --- a/cpan/Win32/t/Unicode.t
 +++ b/cpan/Win32/t/Unicode.t
 @@ -1,8 +1,9 @@
@@ -118,6 +118,3 @@ index c1380e8..fa05188 100644
  }
  $subdir =~ s,/,\\,g;
  # Cygwin64 no longer returns an ANSI name
--- 
-2.37.1
-

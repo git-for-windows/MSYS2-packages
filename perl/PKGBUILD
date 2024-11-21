@@ -1,7 +1,7 @@
 # Maintainer: Alexey Pavlov <Alexpux@gmail.com>
 
 pkgname=perl
-pkgver=5.38.2
+pkgver=5.40.0
 pkgrel=1
 pkgdesc="A highly capable, feature-rich programming language"
 arch=(i686 x86_64)
@@ -142,17 +142,17 @@ provides=('perl-Archive-Tar=2.40'
           'perl-version=0.9929')
 # Add your own provides here
 provides=(${provides[@]})
-sha256sums=('d91115e90b896520e83d4de6b52f8254ef2b70a8d545ffab33200ea9f1cf29e8'
+sha256sums=('d5325300ad267624cb0b7d512cfdfcd74fa7fe00c455c5b51a6bd53e5e199ef9'
             '91bf8a45a3f04f51fe0eca146a71e278d41dbde19ba60dabc1e41c4639477c07'
             '478a52dc440d5ca324f4c95238b39cc8c90d5d7d8d5601fa085ffef79fea04f4'
             '11ce66bcf4803b0bf27179a32ce53f41bcdfa967c4c0d54ac103dbc4951d18a3'
             'fe91f1de38af525cb82503feef553b71299c52ea52c01b1959143f48f4051ffa'
-            'e45df328a7128604a1a7b901e44da67f7ebb34162ca23c980b4e36553c0e7449'
-            'a074ce00dabd7876293cf0fa8c8be26029992f51873e33cd2213b6acf60cafbb'
-            '1bf02b601f670cc1c8f65e63ec7a10578f92c8ecd8a5752fe331479bd6115311'
-            'e05e20b29c950555edfa246d2b9177188a4b265d1887c262f5b272f382696474'
-            '3ec217cb7f47c34a79addb9396d522596495584aaf6b24b17c6caf6a16d2cb62'
-            '4c44801139321e77a3ade921ce93b114100346ad5b17d03a67b2a92b85ee8a27')
+            'b99a12d0544b3e703d5c8c7eee6eb87c0fd3dd7db67ea9e1a2351f6453d293ef'
+            'cd3696b00ddc3ad3d695548c4f7a08f7d4f88574e2b5353c5eb6d235376a744c'
+            'ce8c6985e2379f90e9ce9a1edaf88d532c2301eb40fda8b944530b5ff171aab3'
+            '804d561dfe52430f23de7f5ac051c8c8cb7a6035785fae36fe531b1d99e18873'
+            'bdfc79577d7a85351f8246762d6c6db1b212b1677853e039fb6bcee25e2e618d'
+            '6c8848e03392cbba6bc1bcd92e92bdde0cfd4e8bf5d6337ccd7fd23d99b2af7b')
 
 prepare() {
   chmod -R 0666 ${srcdir}/${pkgname}-${pkgver}
