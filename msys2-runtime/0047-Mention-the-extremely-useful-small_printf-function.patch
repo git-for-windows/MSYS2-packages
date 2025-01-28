@@ -1,7 +1,7 @@
-From 6990ce7e94d985ccaf4c1b83de6e612af503e172 Mon Sep 17 00:00:00 2001
+From 4d26e520c6958bc14fc8700e130f0ba1b993b731 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Fri, 20 Feb 2015 11:54:47 +0000
-Subject: [PATCH 46/N] Mention the extremely useful small_printf() function
+Subject: [PATCH 47/N] Mention the extremely useful small_printf() function
 
 It came in real handy while debugging an issue that strace 'fixed'.
 

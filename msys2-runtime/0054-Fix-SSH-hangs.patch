@@ -1,7 +1,7 @@
-From 67bdfc7ab0448278166f94d6fc9c529f6ae796ce Mon Sep 17 00:00:00 2001
+From 6ff968d8e27292ee33bc81ac16276092ef559c37 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Thu, 10 Oct 2024 19:52:47 +0200
-Subject: [PATCH 53/N] Fix SSH hangs
+Subject: [PATCH 54/N] Fix SSH hangs
 
 It was reported in https://github.com/git-for-windows/git/issues/5199
 that as of v3.5.4, cloning or fetching via SSH is hanging indefinitely.
@@ -32,10 +32,10 @@ Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
  1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/winsup/cygwin/select.cc b/winsup/cygwin/select.cc
-index bc02c3f..2c09b14 100644
+index 48e811e..95c12ef 100644
 --- a/winsup/cygwin/select.cc
 +++ b/winsup/cygwin/select.cc
-@@ -776,7 +776,7 @@ out:
+@@ -784,7 +784,7 @@ out:
  	}
        ssize_t n = pipe_data_available (s->fd, fh, h, PDA_SELECT | PDA_WRITE);
        select_printf ("write: %s, n %d", fh->get_name (), n);
@@ -44,7 +44,7 @@ index bc02c3f..2c09b14 100644
        if (n < 0 && s->except_selected)
  	gotone += s->except_ready = true;
      }
-@@ -990,7 +990,7 @@ out:
+@@ -998,7 +998,7 @@ out:
        ssize_t n = pipe_data_available (s->fd, fh, fh->get_handle (),
  				       PDA_SELECT | PDA_WRITE);
        select_printf ("write: %s, n %d", fh->get_name (), n);
@@ -53,7 +53,7 @@ index bc02c3f..2c09b14 100644
        if (n < 0 && s->except_selected)
  	gotone += s->except_ready = true;
      }
-@@ -1416,7 +1416,7 @@ out:
+@@ -1424,7 +1424,7 @@ out:
      {
        ssize_t n = pipe_data_available (s->fd, fh, h, PDA_SELECT | PDA_WRITE);
        select_printf ("write: %s, n %d", fh->get_name (), n);

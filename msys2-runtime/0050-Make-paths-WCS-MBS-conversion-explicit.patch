@@ -1,7 +1,7 @@
-From e05ee9217c75a5910d111b407f2026e439e67daf Mon Sep 17 00:00:00 2001
+From 2148f68b0379c670916c6f356516dfe892193ac3 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Fri, 18 Dec 2015 20:19:57 +0100
-Subject: [PATCH 49/N] Make paths' WCS->MBS conversion explicit
+Subject: [PATCH 50/N] Make paths' WCS->MBS conversion explicit
 
 	* dcrt0.cc (dll_crt0_1), dtable.cc (handle_to_fn), environ.cc
 	(environ_init, getwinenveq, build_env), external.cc
@@ -456,7 +456,7 @@ index f57465a..57af967 100644
      }
  }
 diff --git a/winsup/cygwin/path.cc b/winsup/cygwin/path.cc
-index 5d2f0a5..f89e631 100644
+index c49025a..d211e30 100644
 --- a/winsup/cygwin/path.cc
 +++ b/winsup/cygwin/path.cc
 @@ -621,7 +621,8 @@ path_conv::check (const UNICODE_STRING *src, unsigned opt,
@@ -469,7 +469,7 @@ index 5d2f0a5..f89e631 100644
    path_conv::check (path, opt, suffixes);
  }
  
-@@ -2550,7 +2551,7 @@ symlink_info::check_shortcut (HANDLE h)
+@@ -2552,7 +2553,7 @@ symlink_info::check_shortcut (HANDLE h)
        if (*(PWCHAR) cp == 0xfeff)	/* BOM */
  	{
  	  char *tmpbuf = tp.c_get ();
@@ -478,7 +478,7 @@ index 5d2f0a5..f89e631 100644
  	      > SYMLINK_MAX)
  	    return 0;
  	  res = posixify (tmpbuf);
-@@ -2631,7 +2632,7 @@ symlink_info::check_sysfile (HANDLE h)
+@@ -2633,7 +2634,7 @@ symlink_info::check_sysfile (HANDLE h)
  	  else
  	    srcbuf += 2;
  	  char *tmpbuf = tp.c_get ();
@@ -487,7 +487,7 @@ index 5d2f0a5..f89e631 100644
  	      > SYMLINK_MAX)
  	    debug_printf ("symlink string too long");
  	  else
-@@ -2899,8 +2900,8 @@ symlink_info::check_reparse_point (HANDLE h, bool remote)
+@@ -2901,8 +2902,8 @@ symlink_info::check_reparse_point (HANDLE h, bool remote)
    path_flags |= ret;
    if (ret & PATH_SYMLINK)
      {
@@ -498,7 +498,7 @@ index 5d2f0a5..f89e631 100644
        /* A symlink is never a directory. */
        fileattr &= ~FILE_ATTRIBUTE_DIRECTORY;
        return posixify (srcbuf);
-@@ -2934,7 +2935,7 @@ symlink_info::check_nfs_symlink (HANDLE h)
+@@ -2936,7 +2937,7 @@ symlink_info::check_nfs_symlink (HANDLE h)
      {
        PWCHAR spath = (PWCHAR)
  		     (pffei->EaName + pffei->EaNameLength + 1);
@@ -507,7 +507,7 @@ index 5d2f0a5..f89e631 100644
  			  spath, pffei->EaValueLength);
        path_flags |= PATH_SYMLINK;
      }
-@@ -4151,7 +4152,7 @@ cygwin_conv_path (cygwin_conv_path_t what, const void *from, void *to,
+@@ -4153,7 +4154,7 @@ cygwin_conv_path (cygwin_conv_path_t what, const void *from, void *to,
  	      }
  	    PUNICODE_STRING up = p.get_nt_native_path ();
  	    buf = tp.c_get ();
@@ -516,7 +516,7 @@ index 5d2f0a5..f89e631 100644
  			  up->Buffer, up->Length / sizeof (WCHAR));
  	    /* Convert native path to standard DOS path. */
  	    if (!strncmp (buf, "\\??\\", 4))
-@@ -4164,11 +4165,11 @@ cygwin_conv_path (cygwin_conv_path_t what, const void *from, void *to,
+@@ -4166,11 +4167,11 @@ cygwin_conv_path (cygwin_conv_path_t what, const void *from, void *to,
  	      {
  		/* Device name points to somewhere else in the NT namespace.
  		   Use GLOBALROOT prefix to convert to Win32 path. */
@@ -530,7 +530,7 @@ index 5d2f0a5..f89e631 100644
  			      up->Buffer, up->Length / sizeof (WCHAR));
  	      }
  	    lsiz = strlen (buf) + 1;
-@@ -4478,8 +4479,8 @@ cygwin_conv_path_list (cygwin_conv_path_t what, const void *from, void *to,
+@@ -4480,8 +4481,8 @@ cygwin_conv_path_list (cygwin_conv_path_t what, const void *from, void *to,
    switch (what & CCP_CONVTYPE_MASK)
      {
      case CCP_WIN_W_TO_POSIX:
@@ -541,7 +541,7 @@ index 5d2f0a5..f89e631 100644
  	return -1;
        what = (what & ~CCP_CONVTYPE_MASK) | CCP_WIN_A_TO_POSIX;
        from = (const void *) winp;
-@@ -5253,9 +5254,9 @@ cwdstuff::get_error_desc () const
+@@ -5255,9 +5256,9 @@ cwdstuff::get_error_desc () const
  void
  cwdstuff::reset_posix (wchar_t *w_cwd)
  {
@@ -553,7 +553,7 @@ index 5d2f0a5..f89e631 100644
  }
  
  char *
-@@ -5280,7 +5281,7 @@ cwdstuff::get (char *buf, int need_posix, int with_chroot, unsigned ulen)
+@@ -5282,7 +5283,7 @@ cwdstuff::get (char *buf, int need_posix, int with_chroot, unsigned ulen)
    if (!need_posix)
      {
        tocopy = tp.c_get ();

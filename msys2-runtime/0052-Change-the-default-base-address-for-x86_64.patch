@@ -1,7 +1,7 @@
-From e1c6154bd29c01f6d5efee7630c3d5feb70833e1 Mon Sep 17 00:00:00 2001
+From bcccc1ff10bf314b5b19e42c71db3457c90c81e2 Mon Sep 17 00:00:00 2001
 From: Mikael Larsson <95430516+chirpnot@users.noreply.github.com>
 Date: Thu, 10 Mar 2022 17:26:42 +0000
-Subject: [PATCH 51/N] Change the default base address for x86_64
+Subject: [PATCH 52/N] Change the default base address for x86_64
 
 This might break things, but it turns out several Windows libraries like
 to be loaded at 0x180000000.

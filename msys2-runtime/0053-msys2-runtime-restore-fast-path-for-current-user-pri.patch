@@ -1,7 +1,7 @@
-From 9ba6664c8b10045fc621e5f86bd1e105cda4f222 Mon Sep 17 00:00:00 2001
+From bd1ebe7fa788e7fbc37dfe30cd0e61cd5857af24 Mon Sep 17 00:00:00 2001
 From: Richard Glidden <rglidden@brocksolutions.com>
 Date: Thu, 24 Aug 2023 13:36:10 -0400
-Subject: [PATCH 52/N] msys2-runtime: restore fast path for current user
+Subject: [PATCH 53/N] msys2-runtime: restore fast path for current user
  primary group
 
 Commit a5bcfe616c7e removed an optimization that fetches the
@@ -55,7 +55,7 @@ index b6acdf7..b38cb9d 100644
    inline bool nss_cygserver_caching () const { return caching; }
    inline void nss_disable_cygserver_caching () { caching = false; }
 diff --git a/winsup/cygwin/uinfo.cc b/winsup/cygwin/uinfo.cc
-index 9e7c239..71234c1 100644
+index 81d9529..f0046cf 100644
 --- a/winsup/cygwin/uinfo.cc
 +++ b/winsup/cygwin/uinfo.cc
 @@ -637,6 +637,11 @@ cygheap_pwdgrp::nss_init_line (const char *line)
@@ -117,7 +117,7 @@ index 9e7c239..71234c1 100644
  		      if ((val = cldap->get_account_name ()))
  			wcscpy (name, val);
 diff --git a/winsup/doc/ntsec.xml b/winsup/doc/ntsec.xml
-index 6877890..fd5b472 100644
+index ae9270e..768c75a 100644
 --- a/winsup/doc/ntsec.xml
 +++ b/winsup/doc/ntsec.xml
 @@ -930,7 +930,16 @@ The two lines starting with the keywords <literal>passwd:</literal> and

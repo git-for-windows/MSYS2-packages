@@ -1,7 +1,7 @@
-From 8b2144fadccafcbc790ec71137b72932adda49dc Mon Sep 17 00:00:00 2001
+From b8aab4a2e7e322247f4c1c4bf3f077beab11ec94 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=EB=A7=88=EB=88=84=EC=97=98?= <nalla@hamal.uberspace.de>
 Date: Mon, 9 Mar 2015 16:24:43 +0100
-Subject: [PATCH 47/N] Fixed path converting with non ascii char.
+Subject: [PATCH 48/N] Fixed path converting with non ascii char.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
