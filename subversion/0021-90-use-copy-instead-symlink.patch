@@ -1,6 +1,17 @@
---- subversion-1.10.1/Makefile.in.orig	2015-09-14 13:25:11.923679100 +0300
-+++ subversion-1.10.1/Makefile.in	2015-09-14 13:25:27.568114500 +0300
-@@ -1009,10 +1009,10 @@
+From cd45f0b963a95d71cc181e428a8a62e4cedec81e Mon Sep 17 00:00:00 2001
+From: Alexey Pavlov <alexpux@gmail.com>
+Date: Mon, 14 Sep 2015 14:39:28 +0300
+Subject: [PATCH 21/22] 90-use-copy-instead-symlink
+
+---
+ Makefile.in | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile.in b/Makefile.in
+index 628336c..a3b782a 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -1031,10 +1031,10 @@ subversion/libsvn_wc/wc-queries.h: $(abs_srcdir)/subversion/libsvn_wc/wc-checks.
  INSTALL_EXTRA_TOOLS=\
    $(MKDIR) $(DESTDIR)$(bindir); \
    test -n "$$SVN_SVNMUCC_IS_SVNSYITF" && \
@@ -14,3 +25,6 @@
    fi; \
    printf '\043\041/bin/sh\n%s\n' \
      'exec $(bindir)/svnfsfs stats $${2:+"-M"} $${2:+"$$2"} "$$1"' \
+-- 
+2.37.2
+
