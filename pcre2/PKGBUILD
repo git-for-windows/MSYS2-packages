@@ -2,7 +2,7 @@
 
 pkgbase=pcre2
 pkgname=('pcre2' 'libpcre2_8' 'libpcre2_16' 'libpcre2_32' 'libpcre2posix' 'pcre2-devel')
-pkgver=10.44
+pkgver=10.45
 pkgrel=1
 pkgdesc="A library that implements Perl 5-style regular expressions"
 arch=('i686' 'x86_64')
@@ -13,7 +13,7 @@ source=(https://github.com/PCRE2project/pcre2/releases/download/${pkgbase}-${pkg
         0001-Allow-building-an-MSYS-DLL.patch
         0002-RunTest-adjust-ISO-8859-1-tests-for-Cygwin.patch
         0003-pcre2-10.40-cygwin-jit.patch)
-sha256sums=('d34f02e113cf7193a1ebf2770d3ac527088d485d4e047ed10e5d217c6ef5de96'
+sha256sums=('21547f3516120c75597e5b30a992e27a592a31950b5140e7b8bfde3f192033c4'
             'SKIP'
             '4130d1c668750006a91ad5217f3206642d5d57f4d86ce4465a09dfa3d051f245'
             'f1fb2eac8776ad338cdbe1db94050fa785d4ec7fc69f4c658ae26287b89f8acd'
