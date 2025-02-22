@@ -1,7 +1,7 @@
 # Maintainer: Alexey Pavlov <alexpux@gmail.com>
 
 pkgname=gnupg
-pkgver=2.4.7
+pkgver=2.5.3
 pkgrel=1
 pkgdesc='Complete and free implementation of the OpenPGP standard'
 provides=('dirmngr' "gnupg2=${pkgver}")
@@ -48,7 +48,7 @@ depends=('bzip2'
 source=("https://gnupg.org/ftp/gcrypt/${pkgname}/${pkgname}-${pkgver}.tar.bz2"{,.sig}
         'gnupg-2.2.8-msys2.patch'
         '0001-gnupg-2.2.9-have-drive-letters.patch')
-sha256sums=('7b24706e4da7e0e3b06ca068231027401f238102c41c909631349dcc3b85eb46'
+sha256sums=('23128b136aed4e5121e793d1b6c60ee50c8007a9d926c1313e524d05386b54ac'
             'SKIP'
             '6e6dfa9a64d4986f47dfb6937addb51e2e22f55c762559f104eae5a226bdd43f'
             'bf9d6675024fa21003f48fc706a5f80799362b7370db0a6de19be36cf73919a5')
