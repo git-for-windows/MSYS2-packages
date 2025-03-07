@@ -1,10 +1,10 @@
-Fix ruby tests.
-
+From 04eb52f53ba5ea1130bd05b82f9f81fe5b5ffb33 Mon Sep 17 00:00:00 2001
 From: David Rothenberger <d.rothenberger@entomo.com>
-
+Date: Thu, 7 Nov 2013 23:02:43 +0400
+Subject: [PATCH 08/22] Fix ruby tests.
 
 ---
- subversion/bindings/swig/ruby/svn/util.rb |    6 +++---
+ subversion/bindings/swig/ruby/svn/util.rb | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/subversion/bindings/swig/ruby/svn/util.rb b/subversion/bindings/swig/ruby/svn/util.rb
@@ -38,3 +38,6 @@ index d409b98..50514ff 100644
      end
    end
  end
+-- 
+2.37.2
+
