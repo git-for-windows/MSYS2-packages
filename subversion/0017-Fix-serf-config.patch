@@ -1,10 +1,10 @@
-Fix serf config
-
+From 00b4e7f7a8608ded9331651597611c4dc111a784 Mon Sep 17 00:00:00 2001
 From: David Rothenberger <daveroth@acm.org>
-
+Date: Mon, 14 Sep 2015 14:39:28 +0300
+Subject: [PATCH 17/22] Fix serf config
 
 ---
- build/ac-macros/serf.m4 |    3 +--
+ build/ac-macros/serf.m4 | 3 +--
  1 file changed, 1 insertion(+), 2 deletions(-)
 
 diff --git a/build/ac-macros/serf.m4 b/build/ac-macros/serf.m4
@@ -21,3 +21,6 @@ index 0a549b3..61d9990 100644
            break
          else
            AC_MSG_RESULT([no])
+-- 
+2.37.2
+
