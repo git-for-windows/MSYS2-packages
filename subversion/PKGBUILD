@@ -18,53 +18,53 @@ options=('!makeflags' '!libtool' '!emptydirs')
 noextract=("subversion-${pkgver}.tar.bz2")
 source=(https://archive.apache.org/dist/subversion/subversion-${pkgver}.tar.bz2{,.asc}
         svnclean
-        01-make-build-directories.patch
-        02-fix-linking.patch
-        03-fix-linking-perl.patch
-        04-fix-switch-tests.patch
-        05-retry-loop.patch
-        06-svnadmin-binary-mode.patch
-        07-fix-path-tests.patch
-        08-ruby-test-fix.patch
-        09-wincrypt.patch
-        10-perl-vendors.patch
-        11-XFAIL-case-sensitive-move-tests.patch
-        12-fix-svnlook-test.patch
-        13-dso_open.patch
-        14-fix_svnauthz_tests.patch
-        15-XFAIL_case_sensitive_tree_conflict.patch
-        16-fix-swig3.patch
-        17-fix-test-link.patch
-        18-fix-serf-config.patch
-        19-remove-contrib-from-configure.patch
-        subversion-1.9.1-msys2.patch
-        remove-checking-symlink.patch
-        90-use-copy-instead-symlink.patch)
+        0001-Create-directories-in-build-tree.patch
+        0002-Fix-linking-for-Cygwin.patch
+        0003-Fix-linking-for-perl.patch
+        0004-Fix-a-switch-test-that-expects-to-an-error-due-to-re.patch
+        0005-Use-WIN32-retry-loop-on-Cygwin-too.patch
+        0006-Use-binary-mode-for-svnadmin-dump-load.patch
+        0007-Don-t-support-DOS-paths-for-Cygwin.patch
+        0008-Fix-ruby-tests.patch
+        0009-Support-wincrypt-for-password-encryption-on-Cygwin.patch
+        0010-Install-perl-modules-into-vendors.patch
+        0011-XFAIL-some-case-sensitive-rename-and-move-tests.patch
+        0012-Fix-svnlook_tests.py-so-it-sets-PATH-in-the-python-h.patch
+        0013-Fix-DSO-open-specifically-for-auth-modules-like-GNOM.patch
+        0014-Fix-svnauthz_tests.py-by-adding-usr-bin-to-PATH.patch
+        0015-Mark-basic_test.py-rm_missing_with_case_clashing_ond.patch
+        0016-Support-swig3.patch
+        0017-Fix-serf-config.patch
+        0018-Remove-contrib.patch
+        0019-subversion-1.9.1-msys2.patch
+        0020-remove-checking-symlink.patch
+        0021-90-use-copy-instead-symlink.patch
+        0022-Avoid-inadvertently-blocking-files-during-svnadmin-c.patch)
 sha256sums=('c9130e8d0b75728a66f0e7038fc77052e671830d785b5616aad53b4810d3cc28'
             'SKIP'
             'b09dd041aba0078c8d50df130ef2f96c3ef8486279a620532fef4fe48ef9961e'
-            '66d8028dbee086502e453d7435aa15f7e141dbc8808e650e883e1d90a0a022b1'
-            '6dc4dda8291087abb94ac0e256833b2ecae452a597fc9222e7443ea0e5694ff7'
-            'd304d641a32f26523fc36389a92b4bf1f96acbb24c654e0c5bfdc8784763310e'
-            'ea93b62a7f71437c7066aa489044fc311457ea330b9735347a4609858e12c2ad'
-            '2504c157f51cfb6453205da3ef2705ad6f36b63169fde3efaf438b7dc4ecc306'
-            '1ee9719475a89e3447fade44e704a32e63c8a2916b38b68984f1cb6a4dae158a'
-            '6445d7f0758e3ddbd91e35612c545c1f4f5cecbd1c8e134b6b8ea66e8a39e6f0'
-            'edad1ae1db35522af533efa8346885a16e9bbdf43ad8196827e8411ca84d7825'
-            'a93ad1ccbcc2e68ef3a50fed9b529107aa434acb6618ddb28f4fde934bfcb3b8'
-            '5ef14d187071c60de834d87dbea18d3fd022fd11a648dc5315bc7b9fa7067141'
-            'eca0edb5d2afbbe8a7d556d8afb79000e653f1e4662b62157368d00f58dd9fff'
-            '4069a84189db7ed0d08c5fda927308d494ac9377e111d70debdbb6ad889af70b'
-            '21038203297180e74bd75878aae6ce5c1c299ca56d71075bb7029e4dbf083fa2'
-            'cad2c464dc3ae6753b1ce2f330d984c97679a52ac1baa411981cfa8c7ebcf312'
-            '7f9e60b99a2ec8424f702b5dc07e5b1d37c8eb7d8bd134cc79a7024cb35292d6'
-            '8682d9f7da2ba8607ed15daf3beec92e5dacda3a6e4c07baaef8991264eb44cd'
-            '17d1767816b5c7bc0ee8dc4809eb16e40975f335c5cb5b5aadbc2999819f0c42'
-            'f61c9b3333d90790a4c6763d81ee05ee5a2029e562c900e92f7526393460181c'
-            'a1072514d1be6e2026ae1e2fa24d3bfd97dfbda13b4bd4d89aae0e871b2aae32'
-            'c89de3d5272b0196440d6fdf21c14170d0c41702c84fbb273ec87c115633d809'
-            'd821304ee957ef4adbb0a8dec9cea3fe62ad7163aef132317d28f70ea25162ca'
-            'fc545e375d8af4ef6d8afad453453480664b6a2ff74915f94b8a7da7de14155b')
+            '5ec8ac87efd106a662b91f74bec402341baf00f4c089a5d100da5b8ca35aa5ae'
+            '36901adb72fbd1c397bf309f5c529e007bbe2d060d582805284ea00d2a5aed22'
+            '70dcb38bc810e76f8d4187ade75a273bf538edce62662e814b88fac5edf6b238'
+            '98c1852d11502d8a1c46a3d9dc31ac59f5458946676cdb1446a9f55d8f499b99'
+            '008ab11dbccdb594dae9c3b4ca36b6046cc52500d34cbc628176e85325ecb87f'
+            '7e3960aa3a9b5647cafd1bc9a53aadedd1b8981a83b16114e294f215fdff7901'
+            '73d206e49cd8f2bfe1575061dc51d5174ece43e3845720057ef5f434ed8eac0e'
+            '3ef14a85b292cf0ae7e63c0d0bfb98697df993e62ea6317e05a0699b09a0cbbf'
+            '468954e8e7c30129f95c7634057cb260544dfe31aea5bf09f36ebf2fd8db4316'
+            '5a782cbb3e408a09b1648c148e7029a51b541acf5f709e627f68cd4017ab12f8'
+            '3f8eee63c708d80dcf4f890ebc36ab508e4b058296728500d986271e9388cf00'
+            '3de47a952de1abeb15f216c966553d2abe27b2113de56dfdc87e5cb87e8bdb66'
+            '2be4fd0cb52a00d047667329bf3c0a1a674800037e194d149c640540643583e4'
+            '5e8f08e76c8fb7cb93466f6984fd0dfbd9eba0a7c0d68442fa1350ee921118c3'
+            '69ec36190c18ca1587797f6c6a68cd70a61407711e527cab321082b78a450c22'
+            '689d4a5ebac50fb9378bc18a1a9a0f5c3b5aec235f378a383d3496511506e23e'
+            '59bd993a0f24ebd52204b7f7e1e1ee6ad3d5572a911f2cbf93fe5aee1e335251'
+            '4a9f031c7eabb1582a165df087133293ee294aa2e578716ee8fc1181f4fbb809'
+            '703452c939ce8018f8030e6dde311921edcd8f188296c7ad43e973ae1964fcdb'
+            'b4cd9841abb8bfd1f692635cc8c7b84ebae7ad8550f6ffb9cfc867aa11aae209'
+            '724eec2b17bd9504b15a485610b00f88f474c275fbcc53bdc0d901c6607d25bb'
+            '5cae2e129257a49071ad83aa12e968ebc229bd9ceb147651ff62285f8f5cf96e')
 validpgpkeys=('91BFBF4D6956BD5DF7B72D23DFE691AE331BA3DB'
               'BA3C15B1337CF0FB222BD41A1BCA6586A347943F'
               'EC25FCC105618D04ADB43429C4416167349A3BCB')
@@ -90,30 +90,32 @@ prepare() {
 
   sed -i 's|except IOError,|except IOError as|' build/getversion.py
 
-  patch -p1 -i ${srcdir}/01-make-build-directories.patch
-  patch -p1 -i ${srcdir}/02-fix-linking.patch
-  patch -p1 -i ${srcdir}/03-fix-linking-perl.patch
-  patch -p1 -i ${srcdir}/04-fix-switch-tests.patch
-  patch -p1 -i ${srcdir}/05-retry-loop.patch
-  patch -p1 -i ${srcdir}/06-svnadmin-binary-mode.patch
-  patch -p1 -i ${srcdir}/07-fix-path-tests.patch
-  patch -p1 -i ${srcdir}/08-ruby-test-fix.patch
-  patch -p1 -i ${srcdir}/09-wincrypt.patch
-  patch -p1 -i ${srcdir}/10-perl-vendors.patch
-  patch -p1 -i ${srcdir}/11-XFAIL-case-sensitive-move-tests.patch
-  patch -p1 -i ${srcdir}/12-fix-svnlook-test.patch
-  patch -p1 -i ${srcdir}/13-dso_open.patch
-  patch -p1 -i ${srcdir}/14-fix_svnauthz_tests.patch
-  patch -p1 -i ${srcdir}/15-XFAIL_case_sensitive_tree_conflict.patch
-  patch -p1 -i ${srcdir}/16-fix-swig3.patch
-  patch -p1 -i ${srcdir}/17-fix-test-link.patch
-  patch -p1 -i ${srcdir}/18-fix-serf-config.patch
-  patch -p1 -i ${srcdir}/19-remove-contrib-from-configure.patch
-  patch -p1 -i ${srcdir}/subversion-1.9.1-msys2.patch
-  patch -p1 -i ${srcdir}/remove-checking-symlink.patch
-  patch -p1 -i ${srcdir}/90-use-copy-instead-symlink.patch
+  patch -p1 -i ${srcdir}/0001-Create-directories-in-build-tree.patch
+  patch -p1 -i ${srcdir}/0002-Fix-linking-for-Cygwin.patch
+  patch -p1 -i ${srcdir}/0003-Fix-linking-for-perl.patch
+  patch -p1 -i ${srcdir}/0004-Fix-a-switch-test-that-expects-to-an-error-due-to-re.patch
+  patch -p1 -i ${srcdir}/0005-Use-WIN32-retry-loop-on-Cygwin-too.patch
+  patch -p1 -i ${srcdir}/0006-Use-binary-mode-for-svnadmin-dump-load.patch
+  patch -p1 -i ${srcdir}/0007-Don-t-support-DOS-paths-for-Cygwin.patch
+  patch -p1 -i ${srcdir}/0008-Fix-ruby-tests.patch
+  patch -p1 -i ${srcdir}/0009-Support-wincrypt-for-password-encryption-on-Cygwin.patch
+  patch -p1 -i ${srcdir}/0010-Install-perl-modules-into-vendors.patch
+  patch -p1 -i ${srcdir}/0011-XFAIL-some-case-sensitive-rename-and-move-tests.patch
+  patch -p1 -i ${srcdir}/0012-Fix-svnlook_tests.py-so-it-sets-PATH-in-the-python-h.patch
+  patch -p1 -i ${srcdir}/0013-Fix-DSO-open-specifically-for-auth-modules-like-GNOM.patch
+  patch -p1 -i ${srcdir}/0014-Fix-svnauthz_tests.py-by-adding-usr-bin-to-PATH.patch
+  patch -p1 -i ${srcdir}/0015-Mark-basic_test.py-rm_missing_with_case_clashing_ond.patch
+  patch -p1 -i ${srcdir}/0016-Support-swig3.patch
+  patch -p1 -i ${srcdir}/0017-Fix-serf-config.patch
+  patch -p1 -i ${srcdir}/0018-Remove-contrib.patch
+  patch -p1 -i ${srcdir}/0019-subversion-1.9.1-msys2.patch
+  patch -p1 -i ${srcdir}/0020-remove-checking-symlink.patch
+  patch -p1 -i ${srcdir}/0021-90-use-copy-instead-symlink.patch
+  patch -p1 -i ${srcdir}/0022-Avoid-inadvertently-blocking-files-during-svnadmin-c.patch
 
   PYTHON=/usr/bin/python2 ./autogen.sh
+  # Hack to allow `libsvn_test-1` to be built
+  sed 's/ -o libsvn_test-1.la / -no-undefined&/' -i build-outputs.mk
 }
 
 build() {
@@ -157,11 +159,11 @@ build() {
   }
 }
 
-#check() {
-#   cd ${pkgname}-${pkgver}
-#   export LANG=C LC_ALL=C
-#   make check check-swig-pl check-swig-py check-swig-rb CLEANUP=yes # check-javahl
-#}
+check() {
+   cd ${pkgname}-${pkgver}
+   export LANG=C LC_ALL=C
+   make check check-swig-pl # check-swig-py check-swig-rb CLEANUP=yes # check-javahl
+}
 
 package() {
   cd ${pkgname}-${pkgver}

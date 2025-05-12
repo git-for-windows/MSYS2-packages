@@ -1,15 +1,17 @@
-Mark basic_test.py rm_missing_with_case_clashing_ondisk_item as XFAIL.
-
+From 39a574301a4c2d413e13a2c09a5df049d01ae9cf Mon Sep 17 00:00:00 2001
 From: David Rothenberger <daveroth@acm.org>
+Date: Thu, 7 Nov 2013 23:02:43 +0400
+Subject: [PATCH 15/22] Mark basic_test.py
+ rm_missing_with_case_clashing_ondisk_item as XFAIL.
 
 It depends on Windows code that can get the canonical case for an on
 disk item, but that has not been implemented for Cygwin.
 ---
- subversion/tests/cmdline/basic_tests.py |    1 +
+ subversion/tests/cmdline/basic_tests.py | 1 +
  1 file changed, 1 insertion(+)
 
 diff --git a/subversion/tests/cmdline/basic_tests.py b/subversion/tests/cmdline/basic_tests.py
-index c6b7482..b8699cf 100755
+index 30bb62b..4f13c56 100755
 --- a/subversion/tests/cmdline/basic_tests.py
 +++ b/subversion/tests/cmdline/basic_tests.py
 @@ -2955,6 +2955,7 @@ def quiet_commits(sbox):
@@ -20,3 +22,6 @@ index c6b7482..b8699cf 100755
  def rm_missing_with_case_clashing_ondisk_item(sbox):
    """rm missing item with case-clashing ondisk item"""
  
+-- 
+2.37.2
+
