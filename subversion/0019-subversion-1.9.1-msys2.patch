@@ -1,0 +1,198 @@
+From fadf9eb7ffe8fb8929710f70c4a965f734416166 Mon Sep 17 00:00:00 2001
+From: Alexey Pavlov <alexpux@gmail.com>
+Date: Mon, 14 Sep 2015 14:39:28 +0300
+Subject: [PATCH 19/22] subversion-1.9.1-msys2
+
+---
+ Makefile.in                                           | 2 +-
+ build/ac-macros/apache.m4                             | 2 +-
+ build/ac-macros/sqlite.m4                             | 2 +-
+ build/config.guess                                    | 6 ++++++
+ build/get-py-info.py                                  | 2 +-
+ configure.ac                                          | 2 +-
+ subversion/bindings/ctypes-python/test/remoterepos.py | 2 +-
+ subversion/bindings/swig/perl/native/Makefile.PL.in   | 2 +-
+ subversion/bindings/swig/python/tests/setup_path.py   | 2 +-
+ subversion/tests/cmdline/commit_tests.py              | 4 ++--
+ subversion/tests/cmdline/svntest/main.py              | 7 +++++--
+ 11 files changed, 21 insertions(+), 12 deletions(-)
+
+diff --git a/Makefile.in b/Makefile.in
+index 43210aa..628336c 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -938,7 +938,7 @@ copy-swig-py: autogen-swig-py swig-py $(SWIG_PY_DIR)/libsvn
+ 	@for f in $(SWIG_PY_SRC_DIR)/*.py $(SWIG_PY_DIR)/*.py; do \
+ 	  ! [ -f "$$f" ] || cp -pf $$f $(SWIG_PY_DIR)/libsvn; \
+ 	done
+-	@cd $(SWIG_PY_DIR)/libsvn;ln -sf ../.libs/*.so .
++	@cd $(SWIG_PY_DIR)/libsvn;ln -sf ../.libs/*.dll .
+ 	@touch $(SWIG_PY_DIR)/libsvn/__init__.py
+ 
+ check-swig-py: swig-py copy-swig-py
+diff --git a/build/ac-macros/apache.m4 b/build/ac-macros/apache.m4
+index 914e6e8..25df038 100644
+--- a/build/ac-macros/apache.m4
++++ b/build/ac-macros/apache.m4
+@@ -208,7 +208,7 @@ if test -n "$APXS" && test "$APXS" != "no"; then
+     INSTALL_APACHE_RULE=install-mods-shared
+     INSTALL_APACHE_MODS=true
+     case $host in
+-      *-*-cygwin*)
++      *-*-cygwin* | *-*-msys*)
+         APACHE_LDFLAGS="-shrext .so"
+         ;;
+     esac
+diff --git a/build/ac-macros/sqlite.m4 b/build/ac-macros/sqlite.m4
+index c15d15d..047b668 100644
+--- a/build/ac-macros/sqlite.m4
++++ b/build/ac-macros/sqlite.m4
+@@ -264,7 +264,7 @@ dnl shared libraries.  Copied from build/libtool.m4
+ AC_DEFUN(_SVN_SQLITE_DSO_LIBS,
+ [
+   case $host_os in
+-  beos* | mingw* | pw32* | cegcc* | cygwin*)
++  beos* | mingw* | pw32* | cegcc* | cygwin* | msys*)
+     svn_sqlite_dso_ldflags=
+     ;;
+ 
+diff --git a/build/config.guess b/build/config.guess
+index dbfb978..6d4c7e5 100755
+--- a/build/config.guess
++++ b/build/config.guess
+@@ -824,6 +824,9 @@ EOF
+     *:MINGW64*:*)
+ 	echo ${UNAME_MACHINE}-pc-mingw64
+ 	exit ;;
++    i*:MSYS*:*)
++	echo ${UNAME_MACHINE}-pc-msys
++	exit ;;
+     *:MINGW*:*)
+ 	echo ${UNAME_MACHINE}-pc-mingw32
+ 	exit ;;
+@@ -867,6 +870,9 @@ EOF
+     amd64:CYGWIN*:*:* | x86_64:CYGWIN*:*:*)
+ 	echo x86_64-unknown-cygwin
+ 	exit ;;
++    amd64:MSYS*:*:* | x86_64:MSYS*:*:*)
++	echo x86_64-unknown-msys
++	exit ;;
+     p*:CYGWIN*:*)
+ 	echo powerpcle-unknown-cygwin
+ 	exit ;;
+diff --git a/build/get-py-info.py b/build/get-py-info.py
+index 95bad41..6c7a920 100644
+--- a/build/get-py-info.py
++++ b/build/get-py-info.py
+@@ -89,7 +89,7 @@ def link_options():
+       sysconfig.get_config_var('PYTHON'))
+     add_option_if_missing(options, "-bundle_loader", python_exe)
+ 
+-  elif sys.platform == 'cygwin' or sys.platform.startswith('openbsd'):
++  elif sys.platform == 'cygwin' or sys.platform == 'msys' or sys.platform.startswith('openbsd'):
+ 
+     # Add flags to build against the Python library (also necessary
+     # for Darwin, but handled elsewhere).
+diff --git a/configure.ac b/configure.ac
+index def819f..6986bde 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -322,7 +322,7 @@ dnl It should always work but with libtool 1.4.3 on OS X it breaks the build.
+ dnl So we only turn it on for platforms where we know we really need it.
+ AC_MSG_CHECKING([whether libtool needs -no-undefined])
+ case $host in
+-  *-*-cygwin*)
++  *-*-cygwin* | *-*-msys*)
+     AC_MSG_RESULT([yes])
+     LT_NO_UNDEFINED="-no-undefined"
+     ;;
+diff --git a/subversion/bindings/ctypes-python/test/remoterepos.py b/subversion/bindings/ctypes-python/test/remoterepos.py
+index dadea9e..6cabcf3 100755
+--- a/subversion/bindings/ctypes-python/test/remoterepos.py
++++ b/subversion/bindings/ctypes-python/test/remoterepos.py
+@@ -175,7 +175,7 @@ class RemoteRepositoryTestCase(unittest.TestCase):
+             f.close()
+         os.chmod(hook, S_IRWXU)
+ 
+-        if sys.platform == "cygwin":
++        if sys.platform == "cygwin" or sys.platform == "msys":
+             ### FIXME: When you try to set revprops, cygwin crashes
+             ###        with a fatal error, so we skip this test for now.
+             return
+diff --git a/subversion/bindings/swig/perl/native/Makefile.PL.in b/subversion/bindings/swig/perl/native/Makefile.PL.in
+index 8ec0bac..3871e71 100644
+--- a/subversion/bindings/swig/perl/native/Makefile.PL.in
++++ b/subversion/bindings/swig/perl/native/Makefile.PL.in
+@@ -73,7 +73,7 @@ $cflags =~ s/-Wredundant-decls//g;
+ # According to the log of r7937, the flags guarded by the conditional break
+ # the build on FreeBSD if not conditionalized.
+ my $apr_ldflags = '@SVN_APR_LIBS@'
+-   if $^O eq 'darwin' or $^O eq 'cygwin';
++   if $^O eq 'darwin' or $^O eq 'cygwin' or $^O eq 'msys';
+ 
+ chomp $apr_shlib_path_var;
+ 
+diff --git a/subversion/bindings/swig/python/tests/setup_path.py b/subversion/bindings/swig/python/tests/setup_path.py
+index c53f757..2bad413 100644
+--- a/subversion/bindings/swig/python/tests/setup_path.py
++++ b/subversion/bindings/swig/python/tests/setup_path.py
+@@ -39,7 +39,7 @@ sys.path[0:0] = [ src_swig_python_tests_dir,
+ 
+ # OSes without RPATH support are going to have to do things here to make
+ # the correct shared libraries be found.
+-if sys.platform == 'cygwin':
++if sys.platform == 'cygwin' or sys.platform == 'msys':
+   import glob
+   svndir = os.path.normpath("../../../%s" % bld_swig_python_dir)
+   libpath = os.getenv("PATH").split(":")
+diff --git a/subversion/tests/cmdline/commit_tests.py b/subversion/tests/cmdline/commit_tests.py
+index 7f7591e..9cfd5af 100755
+--- a/subversion/tests/cmdline/commit_tests.py
++++ b/subversion/tests/cmdline/commit_tests.py
+@@ -51,7 +51,7 @@ from svntest.actions import inject_conflict_into_wc
+ #
+ 
+ def is_non_posix_os_or_cygwin_platform():
+-  return (not svntest.main.is_posix_os()) or sys.platform == 'cygwin'
++  return (not svntest.main.is_posix_os()) or sys.platform == 'cygwin' or sys.platform == 'msys'
+ 
+ def get_standard_state(wc_dir):
+   """Return a status list reflecting the local mods made by
+@@ -1010,7 +1010,7 @@ def commit_uri_unsafe(sbox):
+ 
+   # Note: on Windows, files can't have angle brackets in them, so we
+   # don't tests that case.
+-  if svntest.main.windows or sys.platform == 'cygwin':
++  if svntest.main.windows or sys.platform == 'cygwin' or sys.platform == 'msys':
+     angle_name = '_angle_'
+     nasty_name = '#![]{}()__%'
+   else:
+diff --git a/subversion/tests/cmdline/svntest/main.py b/subversion/tests/cmdline/svntest/main.py
+index 7f5bb2c..1345b46 100644
+--- a/subversion/tests/cmdline/svntest/main.py
++++ b/subversion/tests/cmdline/svntest/main.py
+@@ -343,7 +343,7 @@ def setup_development_mode():
+ def get_admin_name():
+   "Return name of SVN administrative subdirectory."
+ 
+-  if (windows or sys.platform == 'cygwin') \
++  if (windows or sys.platform == 'cygwin' or sys.platform == 'msys') \
+       and 'SVN_ASP_DOT_NET_HACK' in os.environ:
+     return '_svn'
+   else:
+@@ -1640,8 +1640,11 @@ def is_os_darwin():
+ def is_os_cygwin():
+   return sys.platform == 'cygwin'
+ 
++def is_os_msys():
++  return sys.platform == 'msys'
++
+ def is_fs_case_insensitive():
+-  return (is_os_darwin() or is_os_windows() or is_os_cygwin())
++  return (is_os_darwin() or is_os_windows() or is_os_cygwin() or is_os_msys())
+ 
+ def is_threaded_python():
+   return True
+-- 
+2.37.2
+
