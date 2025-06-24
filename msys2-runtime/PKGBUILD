@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.3
-pkgrel=2
+pkgrel=3
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -75,9 +75,11 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0046-Change-the-default-base-address-for-x86_64.patch
         0047-msys2-runtime-restore-fast-path-for-current-user-pri.patch
         0048-Cygwin-Fix-compatibility-with-w32api-headers-v13.patch
-        0049-symlink_native-allow-linking-to.patch)
+        0049-symlink_native-allow-linking-to.patch
+        0050-symlink_native-allow-linking-to.patch
+        0051-pipe-fix-SSH-hang-again.patch)
 sha256sums=('53d2be8a2dcf58e7eae7823ef01a5b8ce0eba704b132d19167396eb162db378c'
-            '24a6defda6fd286c96e18f8ee8c7f36fd3c010f2df8e3b619e1ebb61bb61b1df'
+            '0ab4e5dbbcaa665c9adf4c90fb270442b94411bc9a5cc8d6fa8d4418b4857ed3'
             '5538db757661949423563bab5e4f383dfa4ef0cf3301cf43f23b482392554b3b'
             '2fb9b2b297797d20cd901eaee2de735e8cdda1c1e5836e9ff77856c0d1216860'
             '780977d71e35bbe4c0dcda5272895267d68d635f311e224f7981858f7192a85e'
@@ -126,7 +128,9 @@ sha256sums=('53d2be8a2dcf58e7eae7823ef01a5b8ce0eba704b132d19167396eb162db378c'
             '8fbb38dc064d11599b2314311abfa632ec5a8da4786c716299e276abd29d7326'
             '6db2e2a7e45125974de355fd685d3a652c1f17e5bd2a94606cbba33520d96624'
             '37f4dcaab659da6f7730a7fdd855c91e51b642bd42820a7f35af514a866db7fd'
-            'e2b046866637090bd9123fd2fcd00faac5d903e4b322959b9c13ea1161e786a2')
+            'e2b046866637090bd9123fd2fcd00faac5d903e4b322959b9c13ea1161e786a2'
+            'b9934e8215605a26ae9b3cac92d3627a1bacad09c83b1329b07bdb3f59a5071d'
+            '1847922d7dcaca5d16fc39e15cab9183839bde63f5a51d726c34e5a1663ce0e4')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -229,7 +233,9 @@ prepare() {
   0046-Change-the-default-base-address-for-x86_64.patch \
   0047-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
   0048-Cygwin-Fix-compatibility-with-w32api-headers-v13.patch \
-  0049-symlink_native-allow-linking-to.patch
+  0049-symlink_native-allow-linking-to.patch \
+  0050-symlink_native-allow-linking-to.patch \
+  0051-pipe-fix-SSH-hang-again.patch
 }
 
 build() {
