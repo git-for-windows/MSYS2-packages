@@ -1,7 +1,7 @@
 # Maintainer: Alexey Pavlov <alexpux@gmail.com>
 
 pkgname=('openssl' 'libopenssl' 'openssl-devel' 'openssl-docs')
-pkgver=3.2.4
+pkgver=3.5.3
 pkgrel=1
 pkgdesc='The Open Source toolkit for Secure Sockets Layer and Transport Layer Security'
 arch=('i686' 'x86_64')
@@ -14,7 +14,7 @@ source=("https://github.com/openssl/openssl/releases/download/openssl-${pkgver}/
         '0002-Support-MSYS2.patch'
         '0004-Override-engines-directory.patch'
         '0005-skip-dllmain-detach.patch')
-sha256sums=('b23ad7fd9f73e43ad1767e636040e88ba7c9e5775bfa5618436a0dd2c17c3716'
+sha256sums=('c9489d2abcf943cdc8329a57092331c598a402938054dc3a22218aea8a8ec3bf'
             'SKIP'
             '7ff3213d8d085238695f076d254f16d15b16a9baca1f9393c1bed0057006da2c'
             '6a070bc0683eb2dd03f071585b05cc5a3ee02096b41105e20d4ae950ee15ceb7'
