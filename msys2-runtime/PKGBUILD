@@ -261,7 +261,7 @@ build() {
   # split debug info from msys-2.0.dll
   cd "${srcdir}"/dest
   objcopy --add-gnu-debuglink=/dev/null --only-keep-debug usr/bin/msys-2.0.dll usr/bin/msys-2.0.dbg
-  objcopy -g --add-gnu-debuglink=usr/bin/msys-2.0.dbg usr/bin/msys-2.0.dll usr/bin/msys-2.0.dll.new
+  objcopy --strip-debug --strip-unneeded --add-gnu-debuglink=usr/bin/msys-2.0.dbg usr/bin/msys-2.0.dll usr/bin/msys-2.0.dll.new
   mv -f usr/bin/msys-2.0.dll.new usr/bin/msys-2.0.dll
 }
 
