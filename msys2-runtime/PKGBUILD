@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.4
-pkgrel=1
+pkgrel=2
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -237,8 +237,10 @@ build() {
     OPTIM="-O2"
   fi
 
-  CFLAGS="$OPTIM -pipe -ggdb"
-  CXXFLAGS="$OPTIM -pipe -ggdb"
+  # We use `-g0` here to suppress debug symbols, to avoid having to call `strip.exe`
+  # on the binary files (which would break code-signing those files).
+  CFLAGS="$OPTIM -pipe -g0"
+  CXXFLAGS="$OPTIM -pipe -g0"
 
   # otherwise it asks git which appends "-dirty" because of our uncommited patches
   CFLAGS+=" -DCYGPORT_RELEASE_INFO=${pkgver}"
@@ -265,6 +267,7 @@ build() {
 
 package_msys2-runtime() {
   pkgdesc="Posix emulation engine for Windows"
+  options=('!strip')
   conflicts=('catgets' 'libcatgets' 'msys2-runtime-3.6')
   replaces=('catgets' 'libcatgets' 'msys2-runtime-3.6')
 
