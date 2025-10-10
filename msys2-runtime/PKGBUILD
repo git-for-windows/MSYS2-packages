@@ -175,7 +175,7 @@ prepare() {
     winsup/cygwin/include/cygwin/exit_process.h \
     winsup/utils/mingw/getprocaddr.c
 
-  apply_git_am_with_msg \
+  apply_patch_with_msg \
  \
   0001-Mention-the-extremely-useful-small_printf-function.patch \
   0002-Allow-native-symlinks-to-non-existing-targets-in-nat.patch \
