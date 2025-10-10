@@ -1,7 +1,7 @@
 # Maintainer: Alexey Pavlov <alexpux@gmail.com>
 
 pkgname=openssh
-pkgver=10.1p1
+pkgver=10.2p1
 pkgrel=1
 pkgdesc='Free version of the SSH connectivity tools'
 url='http://www.openssh.org/portable.html'
@@ -16,7 +16,7 @@ source=("https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/${pkgname}-${pkgve
         0003-openssh-skip-privilege-separation-tests.patch
         0004-Allow-scp-to-copy-files-that-start-with-a-Windows-dr.patch
         0005-Disallow-interop-tests-and-extra-tests-to-run-concur.patch)
-sha256sums=('b9fc7a2b82579467a6f2f43e4a81c8e1dfda614ddb4f9b255aafd7020bbf0758'
+sha256sums=('ccc42c0419937959263fa1dbd16dafc18c56b984c03562d2937ce56a60f798b2'
             'SKIP'
             'ca1e4a8e6248cd4e36ece97005faff1cbd8bdfdda197be7194303a9e5209f492'
             '5d9a69b4e37dba1ecd87fa71a80743ba9563dd64b91698b1d667b6bcdac752ed'
