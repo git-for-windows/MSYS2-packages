@@ -1,0 +1,37 @@
+From 5c25e842e45c80f87ec018c4cbab4fe7191d78f0 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 21 Nov 2019 14:21:01 +0100
+Subject: [PATCH 05/N] Use MB_CUR_MAX == 6 by default
+
+Internally, Cygwin already uses __utf8_mbtowc(), even if it still claims
+to use the "ASCII" charset.
+
+But the `MB_CUR_MAX` value (which is not actually a constant, but
+dependent on the current locale) was still 1, which broke the initial
+`globify()` call while parsing the the command-line in `build_argv()`
+for non-ASCII arguments.
+
+This fixes https://github.com/git-for-windows/git/issues/2189
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ newlib/libc/locale/lctype.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/newlib/libc/locale/lctype.c b/newlib/libc/locale/lctype.c
+index a07ab68..3f118e9 100644
+--- a/newlib/libc/locale/lctype.c
++++ b/newlib/libc/locale/lctype.c
+@@ -25,7 +25,12 @@
+ 
+ #define LCCTYPE_SIZE (sizeof(struct lc_ctype_T) / sizeof(char *))
+ 
++#ifdef __CYGWIN__
++/* Cygwin uses __utf8_mbtowc() by default, therefore mb_cur_max := 6 */
++static char	numone[] = { '\x06', '\0'};
++#else
+ static char	numone[] = { '\1', '\0'};
++#endif
+ 
+ const struct lc_ctype_T _C_ctype_locale = {
+ 	"ASCII",			/* codeset */
