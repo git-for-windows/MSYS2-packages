@@ -1,0 +1,36 @@
+From 2a9d34f306dd4562bbbd32b10870412ee8126e5d Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 20 Feb 2015 13:56:22 +0000
+Subject: [PATCH 03/N] WIP Handle 8-bit characters under LOCALE=C
+
+TODO!!! Verify that this is still needed, as it seems to be no longer
+necessary to pass Git's test suite because the official MSYS2 runtime
+lacks this patch yet is sufficient to let Git's test suite succeed.
+
+Even when the character set is specified as ASCII, we should handle data
+outside the 7-bit range gracefully by simply copying it, even if it is
+technically no longer ASCII.
+
+This fixes several of Git for Windows' tests, e.g. t7400.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/strfuncs.cc | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/winsup/cygwin/strfuncs.cc b/winsup/cygwin/strfuncs.cc
+index eb657605..4542003 100644
+--- a/winsup/cygwin/strfuncs.cc
++++ b/winsup/cygwin/strfuncs.cc
+@@ -1189,7 +1189,11 @@ _sys_mbstowcs (mbtowc_p f_mbtowc, wchar_t *dst, size_t dlen, const char *src,
+ 	    {
+ 	      bytes = 1;
+ 	      if (dst)
++#ifdef STRICTLY_7BIT_ASCII
+ 		*ptr = L'\xf000' | *pmbs;
++#else
++		*ptr = *pmbs;
++#endif
+ 	    }
+ 	  memset (&ps, 0, sizeof ps);
+ 	}
