@@ -78,7 +78,7 @@ jobs:
           set -x &&
           mkdir -p artifacts &&
           err= &&
-          for dir in $(git diff --name-only \
+          for dir in $(git diff --name-only --diff-filter=ACMRTUXB \
               ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} |
              sed -n 's/^\([a-z][^/]*\)\/.*/\1/p' |
              sort |
