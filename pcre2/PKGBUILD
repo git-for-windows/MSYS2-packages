@@ -2,7 +2,7 @@
 
 pkgbase=pcre2
 pkgname=('pcre2' 'libpcre2_8' 'libpcre2_16' 'libpcre2_32' 'libpcre2posix' 'pcre2-devel')
-pkgver=10.46
+pkgver=10.47
 pkgrel=1
 pkgdesc="A library that implements Perl 5-style regular expressions"
 arch=('i686' 'x86_64')
@@ -13,7 +13,7 @@ source=(https://github.com/PCRE2project/pcre2/releases/download/${pkgbase}-${pkg
         0001-Allow-building-an-MSYS-DLL.patch
         0002-RunTest-adjust-ISO-8859-1-tests-for-Cygwin.patch
         0003-pcre2-10.40-cygwin-jit.patch)
-sha256sums=('15fbc5aba6beee0b17aecb04602ae39432393aba1ebd8e39b7cabf7db883299f'
+sha256sums=('47fe8c99461250d42f89e6e8fdaeba9da057855d06eb7fc08d9ca03fd08d7bc7'
             'SKIP'
             '75d0b002035698d427b31a81c2efc518beea17e0e410f59185ef02e599b45f04'
             '0edaf45f742d388ddf96313e92d44f4942da2b0dc24ca0a0b47b5b223b6eee67'
@@ -57,7 +57,7 @@ check() {
 
   # Work around bug in PCRE2 10.44
   test i686 != "$CARCH" ||
-  for f in testdata/testoutput8-8-2 testdata/testoutput8-16-2 testdata/testoutput8-32-2
+  for f in testdata/testoutput8-8-2 testdata/testoutput8-16-2
   do
     cp "../${pkgname}-${pkgver}/$f" "../${pkgname}-${pkgver}/$f.backup"
     perl -pi -e 's{^(Memory allocation - compiled block : )(\d+)$}{$1 . ($2 - 24)}e' "../${pkgname}-${pkgver}/$f"
@@ -65,7 +65,7 @@ check() {
 
   make -j1 check
 
-  for f in testdata/testoutput8-8-2 testdata/testoutput8-16-2 testdata/testoutput8-32-2
+  for f in testdata/testoutput8-8-2 testdata/testoutput8-16-2
   do
     test ! -f "../${pkgname}-${pkgver}/$f.backup" ||
     mv "../${pkgname}-${pkgver}/$f.backup" "../${pkgname}-${pkgver}/$f"
