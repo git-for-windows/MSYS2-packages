@@ -25,7 +25,7 @@ jobs:
           MAKEFLAGS: -j5
           MSYS2_PATH_TYPE: minimal
       - name: "Upload binaries"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: msys2-packages
           path: artifacts/*.pkg.tar.*
@@ -118,7 +118,7 @@ jobs:
           MSYS2_PATH_TYPE: minimal
           GIT_CONFIG_PARAMETERS: "'user.name=ci' 'user.email=ci@users.noreply.github.com'"
       - name: "Upload binaries"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: msys2-packages-i686
           path: artifacts/*.pkg.tar.*
