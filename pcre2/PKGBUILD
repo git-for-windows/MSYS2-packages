@@ -64,6 +64,7 @@ check() {
   done
 
   make -j1 check
+  cat ./testsuite.log
 
   for f in testdata/testoutput8-8-2 testdata/testoutput8-16-2
   do
