@@ -1,0 +1,53 @@
+From 826499cc1f0d7b484a510bcc07004a7d88d6267a Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 2 Jun 2017 17:54:57 +0200
+Subject: [PATCH 2/3] RunTest: skip ISO-8859-1 tests for Cygwin
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+PCRE2 has a test that verifies the "starting code unit" for several
+ISO-8859-1 tests. In particular, it wants to verify that the code points
+0xAA, 0xB5 and 0xBA in ISO-8859-1 (which translate to ª, µ and º,
+respectively) are considered to be word characters, 0xB5 even a
+lower-case one.
+
+However, Cygwin (and for the same reason, MSYS) does _not_ consider
+those characters to be word characters, but considers them _punctuation_
+characters:
+https://github.com/cygwin/cygwin/blob/cygwin-3.4.2/newlib/libc/ctype/ctype_iso.h#L10-L12
+(punctuation characters are marked up with a `_P`, see
+https://github.com/cygwin/cygwin/blob/cygwin-3.4.2/newlib/libc/include/ctype.h#L98,
+and alphanumerical characters are marked up with `_U` for upper-case,
+`_L` for lower-case and `_N` for numerical characters:
+https://github.com/cygwin/cygwin/blob/cygwin-3.4.2/newlib/libc/include/ctype.h#L99).
+
+Therefore, these tests will always fail.
+
+Git for Windows' fork of MSYS2-packages worked around this for years by
+specifically testing whether the mu character is considered a word
+character, and if not, edit the expectations accordingly. These
+workarounds were always finicky, though, and it became too cumbersome to
+maintain them.
+
+As a consequence, PCRE2's ISO-8859-1 tests will now be skipped in Git
+for Windows.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ RunTest | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/RunTest b/RunTest
+index 57a0345..d53903d 100755
+--- a/RunTest
++++ b/RunTest
+@@ -470,7 +470,7 @@ if [ $do0  = no -a $do1  = no -a $do2  = no -a $do3  = no -a \
+   do0=yes
+   do1=yes
+   do2=yes
+-  do3=yes
++  do3=no # Expected to fail with Cygwin/MSYS
+   do4=yes
+   do5=yes
+   do6=yes

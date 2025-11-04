@@ -11,12 +11,12 @@ license=('BSD')
 makedepends=('libreadline-devel' 'libbz2-devel' 'zlib-devel')
 source=(https://github.com/PCRE2project/pcre2/releases/download/${pkgbase}-${pkgver}/${pkgbase}-${pkgver}.tar.bz2{,.sig}
         0001-Allow-building-an-MSYS-DLL.patch
-        0002-RunTest-adjust-ISO-8859-1-tests-for-Cygwin.patch
+        0002-RunTest-skip-ISO-8859-1-tests-for-Cygwin.patch
         0003-pcre2-10.40-cygwin-jit.patch)
 sha256sums=('47fe8c99461250d42f89e6e8fdaeba9da057855d06eb7fc08d9ca03fd08d7bc7'
             'SKIP'
             '75d0b002035698d427b31a81c2efc518beea17e0e410f59185ef02e599b45f04'
-            '0edaf45f742d388ddf96313e92d44f4942da2b0dc24ca0a0b47b5b223b6eee67'
+            'c4e1c22bf0eca8ceaceaa1888bc1cd545adf1c5e93e2a83fb89eadc9d4b748f5'
             'e90e776d43a57767ac551e896e6191920577bbfc659bbd6fc6b48380c2c8fd44')
 validpgpkeys=('A95536204A3BB489715231282A98E77EB6F24CA8') # Nicholas Wilson <nicholas@nicholaswilson.me.uk>
 
@@ -24,7 +24,7 @@ prepare() {
   cd "${srcdir}"/${pkgname}-${pkgver}
 
   patch -p1 -i "${srcdir}"/0001-Allow-building-an-MSYS-DLL.patch
-  patch -p1 -i "${srcdir}"/0002-RunTest-adjust-ISO-8859-1-tests-for-Cygwin.patch
+  patch -p1 -i "${srcdir}"/0002-RunTest-skip-ISO-8859-1-tests-for-Cygwin.patch
   patch -p1 -i "${srcdir}"/0003-pcre2-10.40-cygwin-jit.patch
 
   autoreconf -fi
