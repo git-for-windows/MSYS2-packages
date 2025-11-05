@@ -2,19 +2,19 @@
 
 pkgbase=curl
 pkgname=('curl' 'libcurl' 'libcurl-devel')
-pkgver=8.16.0
+pkgver=8.17.0
 pkgrel=1
 pkgdesc="Multi-protocol file transfer utility"
 arch=('i686' 'x86_64')
 url="https://curl.se/"
 license=('spdx:MIT')
 depends=('ca-certificates')
-makedepends=('heimdal-devel' 'libxcrypt-devel' 'libidn2-devel'
+makedepends=('libxcrypt-devel' 'libidn2-devel'
              'libnghttp2-devel' 'libpsl-devel' 'libssh2-devel' 'openssl-devel' 'zlib-devel') #  'libcares-devel'
 options=('!libtool' 'strip' '!debug')
 source=("https://github.com/curl/curl/releases/download/${pkgbase}-${pkgver//./_}/${pkgbase}-${pkgver}.tar.bz2"{,.asc}
         curl-8.10.0-msys2.patch)
-sha256sums=('9459180ab4933b30d0778ddd71c91fe2911fab731c46e59b3f4c8385b1596c91'
+sha256sums=('230032528ce5f85594d4f3eace63364c4244ccc3c801b7f8db1982722f2761f4'
             'SKIP'
             '69673ccecb61c31aa33aa7594e827233becd0603e2a4f0f8f6d4fd32fe8f7545')
 validpgpkeys=('27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2')   # Daniel Stenberg
@@ -38,7 +38,7 @@ build() {
     --enable-ipv6 \
     --disable-symbol-hiding \
     --disable-ares \
-    --with-gssapi \
+    --without-gssapi \
     --with-libidn2 \
     --without-librtmp \
     --with-libssh2 \
@@ -67,7 +67,7 @@ package_curl() {
 
 package_libcurl() {
   pkgdesc="Multi-protocol file transfer library (runtime)"
-  depends=('ca-certificates' 'heimdal-libs' 'libxcrypt' 'libidn2'
+  depends=('ca-certificates' 'libxcrypt' 'libidn2'
           'libnghttp2' 'libpsl' 'libssh2' 'openssl' 'zlib') #'libcares'
   groups=('libraries')
 
@@ -77,7 +77,7 @@ package_libcurl() {
 
 package_libcurl-devel() {
   pkgdesc="Libcurl headers and libraries"
-  depends=("libcurl=${pkgver}" 'heimdal-devel' 'libxcrypt-devel' 'libidn2-devel'
+  depends=("libcurl=${pkgver}" 'libxcrypt-devel' 'libidn2-devel'
            'libnghttp2-devel' 'libpsl-devel' 'libssh2-devel' 'openssl-devel' 'zlib-devel') #'libcares-devel'
   options=('staticlibs')
   groups=('development')
