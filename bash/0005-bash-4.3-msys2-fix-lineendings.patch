@@ -18,9 +18,9 @@ diff --git a/variables.c b/variables.c
 index 028667c..a10594d 100644
 --- a/variables.c
 +++ b/variables.c
-@@ -2593,6 +2593,20 @@ set_if_not (name, value)
- {
-   SHELL_VAR *v;
+@@ -2565,6 +2565,20 @@ set_if_not (const char *name, const char *value)
+   }
+ #endif
  
 +#if defined (__MSYS__)
 +  /* Remove trailing \r from value */
@@ -43,9 +43,9 @@ diff --git a/y.tab.c b/y.tab.c
 index 32b4c7c..ac70820 100644
 --- a/y.tab.c
 +++ b/y.tab.c
-@@ -4746,6 +4752,10 @@ shell_getc (remove_quoted_newline)
- 	  else
- 	    RESIZE_MALLOCED_BUFFER (shell_input_line, i, 2, shell_input_line_size, 256);
+@@ -4957,6 +4957,10 @@ shell_getc (int remove_quoted_newline)
+ 	    continue;
+ #endif
  
 +#ifdef __MSYS__
 +	  if (c == '\r')
@@ -53,4 +53,4 @@ index 32b4c7c..ac70820 100644
 +#endif
  	  if (c == EOF)
  	    {
- 	      if (bash_input.type == st_stream)
+ 	      if (interactive && bash_input.type == st_stream)
