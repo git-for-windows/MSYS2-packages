@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.5
-pkgrel=1
+pkgrel=2
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -73,9 +73,15 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0043-uname-report-msys2-runtime-commit-hash-too.patch
         0044-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch
         0045-fixup-Add-functionality-for-converting-UNIX-paths-in.patch
-        0046-Change-the-default-base-address-for-x86_64.patch)
+        0046-Change-the-default-base-address-for-x86_64.patch
+        0047-Cygwin-termios-Make-is_console_app-return-true-for-u.patch
+        0048-Cygwin-is_console_app-do-handle-errors.patch
+        0049-Cygwin-is_console_app-deal-with-the-.bat-.cmd-file-e.patch
+        0050-Cygwin-path-Implement-path_conv-is_app_execution_ali.patch
+        0051-Cygwin-termios-Change-argument-of-fhandler_termios-s.patch
+        0052-Cygwin-termios-Handle-app-execution-alias-in-is_cons.patch)
 sha256sums=('8c563e2cdbb1be14eadd44ff806e5f115575cf6502e4d9aed86070ae644441bc'
-            '2a6e001efe3aad241d0f8c5d53e05ac00fb823f947406780bf0ba22a3646a49d'
+            'c3caa882a1c287e1991b6bafd2e53cfeacbd6ab9ad3a50c657966a7174bc0b87'
             '79b6ee3b769886e49f28d2f8079493e2845f6c14354c6ba42ce9ed47d93147dc'
             'b06214c0e66ef3a3ac93485305eb201aa130ecd1b0161b679cd777175c9b05ba'
             '86783b1c51cb1c0f483a6e74b1f8a165dff73907939798bbbf8bf06346e491f5'
@@ -121,7 +127,13 @@ sha256sums=('8c563e2cdbb1be14eadd44ff806e5f115575cf6502e4d9aed86070ae644441bc'
             '413175606d64a9584309021ed5a70683de24dd4e086280d89c4415f81a42bad7'
             'b9b14753b2302e13253f51ca977cb44ce781c1e1f8aae86b3d2357d9133acec4'
             '41984c78b1fb7db10cf806f188cb38e2d99d30dbb871931d7c7ea477d7022df8'
-            '2154e4dac82db3456fa36c6b0c7d6c1cbc2ef1e69c10e142c4f66e5f7100d9b8')
+            '2154e4dac82db3456fa36c6b0c7d6c1cbc2ef1e69c10e142c4f66e5f7100d9b8'
+            'a517fa8a8a541280e6d3143ba8fc11e41045b07b05a678c8f9ef3d9042c3603c'
+            '0bfc29f747bbbbb78975ff01d428c9d6744cbeeb9f570db49baafbdee1225305'
+            '685af945738de9505861a924ec59c64e3cfaf4c837c180e3d51af1fd34d7c812'
+            'b93c38910b36ce458f97f02bcae6c5ecdaac3976ecb47c262579a4775f134e08'
+            'fdc53349c6021dce6b3e3852965005c5a8b57e0e40dcb60ee6a2e3624d94f9fb'
+            'e7c171f6851ff4d11301e7657404caca417ef431dd6492ef8d31f102718aa76f')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
