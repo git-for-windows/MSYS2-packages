@@ -30,8 +30,8 @@ index a408800..2933955 100644
    xc_lt_shlib_use_no_undefined='yes'
  fi
  case $host_os in @%:@ (
--  cygwin* | mingw* | cegcc* | os2* | aix*)
-+  cygwin* | msys* | mingw* | cegcc* | os2* | aix*)
+-  cygwin* | mingw* | os2* | aix*)
++  cygwin* | msys* | mingw* | os2* | aix*)
      xc_lt_shlib_use_no_undefined='yes'
      ;;
  esac
