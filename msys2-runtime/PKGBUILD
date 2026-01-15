@@ -3,8 +3,8 @@
 
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
-pkgver=3.6.5
-pkgrel=2
+pkgver=3.6.6
+pkgrel=1
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -28,112 +28,100 @@ makedepends=('cocom'
              'docbook-xsl')
 source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgver}
         msys2-runtime.commit
-        0001-Mention-the-extremely-useful-small_printf-function.patch
-        0002-Allow-native-symlinks-to-non-existing-targets-in-nat.patch
-        0003-WIP-Handle-8-bit-characters-under-LOCALE-C.patch
-        0004-Make-paths-WCS-MBS-conversion-explicit.patch
-        0005-Use-MB_CUR_MAX-6-by-default.patch
-        0006-msys2-runtime-restore-fast-path-for-current-user-pri.patch
-        0007-Fix-msys-library-name-in-import-libraries.patch
-        0008-Rename-dll-from-cygwin-to-msys.patch
-        0009-Add-functionality-for-converting-UNIX-paths-in-argum.patch
-        0010-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch
-        0011-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch
-        0012-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch
-        0013-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch
-        0014-Do-not-convert-environment-for-strace.patch
-        0015-strace.cc-Don-t-set-MSYS-noglob.patch
-        0016-Add-debugging-for-strace-make_command_line.patch
-        0017-strace-quiet-be-really-quiet.patch
-        0018-path_conv-special-case-root-directory-to-have-traili.patch
-        0019-When-converting-to-a-Unix-path-avoid-double-trailing.patch
-        0020-msys2_path_conv-pass-PC_NOFULL-to-path_conv.patch
-        0021-path-conversion-Introduce-ability-to-switch-off-conv.patch
-        0022-dcrt0.cc-Untangle-allow_glob-from-winshell.patch
-        0023-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch
-        0024-Add-debugging-for-build_argv.patch
-        0025-environ.cc-New-facility-environment-variable-MSYS2_E.patch
-        0026-Introduce-the-enable_pcon-value-for-MSYS.patch
-        0027-popen-call-usr-bin-sh-instead-of-bin-sh.patch
-        0028-Expose-full-command-lines-to-other-Win32-processes-b.patch
-        0029-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch
-        0030-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch
-        0031-kill-kill-Win32-processes-more-gently.patch
-        0032-Cygwin-make-option-for-native-inner-link-handling.patch
-        0033-docs-skip-building-texinfo-and-PDF-files.patch
-        0034-install-libs-depend-on-the-toollibs.patch
-        0035-POSIX-ify-the-SHELL-variable.patch
-        0036-Handle-ORIGINAL_PATH-just-like-PATH.patch
-        0037-uname-allow-setting-the-system-name-to-CYGWIN.patch
-        0038-Pass-environment-variables-with-empty-values.patch
-        0039-Optionally-disallow-empty-environment-values-again.patch
-        0040-build_env-respect-the-MSYS-environment-variable.patch
-        0041-Revert-Cygwin-Enable-dynamicbase-on-the-Cygwin-DLL-b.patch
-        0042-Avoid-sharing-cygheaps-across-Cygwin-versions.patch
-        0043-uname-report-msys2-runtime-commit-hash-too.patch
-        0044-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch
-        0045-fixup-Add-functionality-for-converting-UNIX-paths-in.patch
-        0046-Change-the-default-base-address-for-x86_64.patch
-        0047-Cygwin-termios-Make-is_console_app-return-true-for-u.patch
-        0048-Cygwin-is_console_app-do-handle-errors.patch
-        0049-Cygwin-is_console_app-deal-with-the-.bat-.cmd-file-e.patch
-        0050-Cygwin-path-Implement-path_conv-is_app_execution_ali.patch
-        0051-Cygwin-termios-Change-argument-of-fhandler_termios-s.patch
-        0052-Cygwin-termios-Handle-app-execution-alias-in-is_cons.patch)
-sha256sums=('8c563e2cdbb1be14eadd44ff806e5f115575cf6502e4d9aed86070ae644441bc'
-            'c3caa882a1c287e1991b6bafd2e53cfeacbd6ab9ad3a50c657966a7174bc0b87'
-            '79b6ee3b769886e49f28d2f8079493e2845f6c14354c6ba42ce9ed47d93147dc'
-            'b06214c0e66ef3a3ac93485305eb201aa130ecd1b0161b679cd777175c9b05ba'
-            '86783b1c51cb1c0f483a6e74b1f8a165dff73907939798bbbf8bf06346e491f5'
-            '824050ec952d64e4c54566c8ce7cf2585c6704a6c3cbcb1c5500f3e4777fca0a'
-            'b3bdb60c6ae7f2e64f2dd6eb54864a5ad840917f3be818d8165cebb0482fd787'
-            '1f62e630e98133772624f60a855ef6c0dd8138e121d5e725e0b52070d4be0618'
-            '36c1cac78144de8cc122bba40ddc11266f8657879fcd3230135ecb04799f63b0'
-            '25b3bec54dac1ecc844f249ac759dade99c8f3005c412bcad2310fef8235be1e'
-            '89e3963ddc270f5bc7ccc8985965c632608ebdce094b841fc32e2a54baa952bf'
-            'a30bd23b2260bf6fec6ab09f7a19aaf7ce7304b974280b6dc9fc653a668d892b'
-            '0fba87e5c0e82044f076cdd62d34d16cdf52bd126b38791d5c2313aacd7c6d29'
-            '7164b5fd2adc20fbf83c133607431bedd93003e9242edf6f6dda700145e6077f'
-            '9176f602f89011c70e0223bb0422c5715b91dbbe287a26206ffcb684d51ca221'
-            '93c28f2820ed8c2c852a1e163567f963ebf0b8328e368f3315fad7bb0a767e53'
-            '3c8baeb37aa0059af479ba1c98c76ee71dc00b70bab4e7fb47cc45361cc01f47'
-            '9f21aec99b9a79c8b1a1cc7cf798a1263de61cddf7b6359a55666ab57a4bc38f'
-            'd68cd0b7e0c98673abb5a78a6e98daccd2bf575f92b62751db0e462e66247d59'
-            '98b694abafe0ff6e9ce9dcbc39a2a9461ff735d897b805650d0f3bdf7bb9bee5'
-            '8e09a938b61b9dcd7b787138bc4e30861be28c584e9afeffdc6ecb6b27d4ff9f'
-            'ae5d77339f3d8c0ff6d1004bce80d7d16c1448454aeed9f7ee978c5e54482de7'
-            '16042a109d5bfe1a533c17ed72fb8d9f11ea5df2338f476e2ac7106fabc3ae07'
-            '7cab0c1d8e3587fd012de29d4784d0ab2d77f44fe31aabb1165eb2568e743d18'
-            'e543709d287198c3a3130a4e1a866bbbee3c1edc27d2734fe8134235c66a48d2'
-            '53a6b96372fbf2fee14ddc3a9a6dbe380b279875330365ab7dde4964a1115e17'
-            '2ae3fed25ff0547a2fb31c4e54381b8e54778660efb43103d171eaf49cdb6815'
-            '784638bc9fbac49868d1a483dee1591dfd16fef3da1f5eda540e49b5c4d36d47'
-            '932e8e25897c3bc567c800a5be1c296555b07dddf9ada052711dbe21030b1115'
-            'c102f429d2dba9c14e9d60ba60f7e26ef03c08ffcb4d48f232fb68623d3223eb'
-            '8a9b23e12844f069f0f40e8a436300ca9d8c69f9571d5ae4b997b6c0ef7ff61c'
-            '957ac2e8b3fbac31bb742feaa3e48ad5a09051c046cae2f5a50af8b7c7ef83b0'
-            '82e6b1aab710622fe7aa034769e8150d34b5b0e1bd72705de1ba8bebfdaa9558'
-            'ed15a0910c5d994dc0d4b08407a44f0a97f39392c328b5173fcdd9d0e25a013d'
-            'b52b768cb236363286bf8205d0d915162167de4e11a94111ec60d36d3e5d3156'
-            'ad254dbc2732095247f12eb4f7a00bb6bcac099268a610be7b0bbe782010ee6e'
-            '98cc8a2dfd8fbd2b6a2390a16c177583d4d1c77a6fba4d165f65873c8602107e'
-            '720c047842771b8c1d269c403bbf2d6c12af3bc858e8b4a47dd40c2d1efdcd1c'
-            '9ce2f27543da45c2dd27950f06952dbdadc3ff5b763334b2c1a972ce2e3a7b78'
-            '56070bf26014f9e90101a653c52b31a2d1ed3194dbee69b9a0b930df90eefd22'
-            '778c696f235d77b4886dcf66ab51120bdc7cb78f7253e3ebaff7853080ec02f5'
-            '9ae9544bdd9c5b7bbecdd83606bda937795a6474c7daba0b2c032f0122ebff9a'
-            '16d7506a767ffd5f99b4f8be5bb747e7159769e3b58d2896752b3d466411c7a7'
-            '08b4d3ddf65bf2c823d4f45ee3d79d34ee1f6fa50fa68059523f19c6e0ce64d5'
-            '413175606d64a9584309021ed5a70683de24dd4e086280d89c4415f81a42bad7'
-            'b9b14753b2302e13253f51ca977cb44ce781c1e1f8aae86b3d2357d9133acec4'
-            '41984c78b1fb7db10cf806f188cb38e2d99d30dbb871931d7c7ea477d7022df8'
-            '2154e4dac82db3456fa36c6b0c7d6c1cbc2ef1e69c10e142c4f66e5f7100d9b8'
-            'a517fa8a8a541280e6d3143ba8fc11e41045b07b05a678c8f9ef3d9042c3603c'
-            '0bfc29f747bbbbb78975ff01d428c9d6744cbeeb9f570db49baafbdee1225305'
-            '685af945738de9505861a924ec59c64e3cfaf4c837c180e3d51af1fd34d7c812'
-            'b93c38910b36ce458f97f02bcae6c5ecdaac3976ecb47c262579a4775f134e08'
-            'fdc53349c6021dce6b3e3852965005c5a8b57e0e40dcb60ee6a2e3624d94f9fb'
-            'e7c171f6851ff4d11301e7657404caca417ef431dd6492ef8d31f102718aa76f')
+        0001-Fix-msys-library-name-in-import-libraries.patch
+        0002-Rename-dll-from-cygwin-to-msys.patch
+        0003-Add-functionality-for-converting-UNIX-paths-in-argum.patch
+        0004-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch
+        0005-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch
+        0006-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch
+        0007-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch
+        0008-Do-not-convert-environment-for-strace.patch
+        0009-strace.cc-Don-t-set-MSYS-noglob.patch
+        0010-Add-debugging-for-strace-make_command_line.patch
+        0011-strace-quiet-be-really-quiet.patch
+        0012-path_conv-special-case-root-directory-to-have-traili.patch
+        0013-When-converting-to-a-Unix-path-avoid-double-trailing.patch
+        0014-msys2_path_conv-pass-PC_NOFULL-to-path_conv.patch
+        0015-path-conversion-Introduce-ability-to-switch-off-conv.patch
+        0016-dcrt0.cc-Untangle-allow_glob-from-winshell.patch
+        0017-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch
+        0018-Add-debugging-for-build_argv.patch
+        0019-environ.cc-New-facility-environment-variable-MSYS2_E.patch
+        0020-Introduce-the-enable_pcon-value-for-MSYS.patch
+        0021-popen-call-usr-bin-sh-instead-of-bin-sh.patch
+        0022-Expose-full-command-lines-to-other-Win32-processes-b.patch
+        0023-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch
+        0024-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch
+        0025-kill-kill-Win32-processes-more-gently.patch
+        0026-Cygwin-make-option-for-native-inner-link-handling.patch
+        0027-docs-skip-building-texinfo-and-PDF-files.patch
+        0028-install-libs-depend-on-the-toollibs.patch
+        0029-POSIX-ify-the-SHELL-variable.patch
+        0030-Handle-ORIGINAL_PATH-just-like-PATH.patch
+        0031-uname-allow-setting-the-system-name-to-CYGWIN.patch
+        0032-Pass-environment-variables-with-empty-values.patch
+        0033-Optionally-disallow-empty-environment-values-again.patch
+        0034-build_env-respect-the-MSYS-environment-variable.patch
+        0035-Revert-Cygwin-Enable-dynamicbase-on-the-Cygwin-DLL-b.patch
+        0036-Avoid-sharing-cygheaps-across-Cygwin-versions.patch
+        0037-uname-report-msys2-runtime-commit-hash-too.patch
+        0038-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch
+        0039-fixup-Add-functionality-for-converting-UNIX-paths-in.patch
+        0040-Mention-the-extremely-useful-small_printf-function.patch
+        0041-Allow-native-symlinks-to-non-existing-targets-in-nat.patch
+        0042-WIP-Handle-8-bit-characters-under-LOCALE-C.patch
+        0043-Make-paths-WCS-MBS-conversion-explicit.patch
+        0044-Use-MB_CUR_MAX-6-by-default.patch
+        0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch
+        0046-Change-the-default-base-address-for-x86_64.patch)
+sha256sums=('d57283d6fe6fc35c14675a4aa56e0382f168dc6baa5bab46ab83efe81c58bbba'
+            '3bb7c7516363f2492297901826cec228ac32e31e58b33fd17ff0043e8b489ac2'
+            'd3c997a88bef74e70c7b394ee5c4f63ea758784325809b665724aa521f0fbd70'
+            '8b366b9e4925108369e9bd3ea9daaac1903db6599e5586629663e7db2699d406'
+            'eb3e71319aa1f0d02c398c4f3ce392a49d1600e89e64782021d732a1eda857ba'
+            'a2c3b08fa04d88e0230490df04676f7c574e71d2c03ad0a822c16e3ef6b16a82'
+            '4892a07b8420387d3a779404525baa22f19bfb26cc91edb26dd884b2fc6aab2a'
+            '74515b662fdab99c8c43fea43d814fa915395038b813a34044d99b4533d463c8'
+            'b259ec400241b4c9f28e0acf5f0cd1c98c9a6c56c7f7ddd13f6e8f481618bc6c'
+            '499e102283fa099573e5be9bde3c6592ef825d071ff3d8ab22f1d3cef3b81dad'
+            'dc05d606ee863d45fc2e197fd552268778e6c073ad22f664e0cf5d5209c936cb'
+            '6ad3f346c0b7e1754faf26771b201ed337eb40b28c7e42e29c0091fe68f057e5'
+            '37cbbb087b5c6f3c9a5586e7bcd843ae0aac80a737b0bdbbbaef28f9ce1d6dec'
+            '6abefb51ff1de3548f44c8a632d1cfa1e87b41e8ddd554ff04b15236a3359e49'
+            'baa423ad63c5b350ca17b1e2bc6fc4e1fa5dd021bf8c1baba56d37b98a632d2c'
+            'e2b584dfc791e1f42974dece1513c4cc1324543e1e22651ada915b83d22103c1'
+            'f668bbc20424b95cabaf87e5af56a54bdeab647afe1ce58fa248cc79a5f86f89'
+            '0ba5561a570c72cddeeb180891d9c9272b335fc42ccf7ced1e8fc72b908d4145'
+            'a3ef5350eb78e879a010d61aa3e6f30f13f6e8182f000a85f9fd19b8bcce7cd3'
+            'e561c433e931913cf0fdf151ca0fe5b3d21bf19bea0e73329407e48fd3e75ba2'
+            '971638e00d50c6f749c940dc5c69bfaae9ebf33d271b54407993a619385c4a75'
+            'b1ab44101e4e97a8319aecea3d6cd3647a0d5ea757c6e44a81c69a400157ef4f'
+            'b48b07b362aeefde4b652a809ed22aadd1e6b5d3a1c7fc955de84920cda5ce6f'
+            '6c036a34d3bda3fad0805c15d67897a059af499804858bc6ba493803e4841ef4'
+            '1fc0279a90a8b2dc3962dc512c881039a65ef057f42028299099c1eb1fb1cb5b'
+            '11372d6fad0ca0704cc15a028f835f0b58f363340a74fab8fede898f227f574b'
+            '665a4716e11f7d83e3c6271a9ce40556576fb5aa4d20fe090cfcb03e06f2a964'
+            '97473d1d15db954214cdc980c929a82e54d63e4c97cbca896eba317bdf13fa9e'
+            'e3e6a7781622590b17c6ade477bd8341eb735b196339aa8f38ad2c888c1f3f15'
+            'a48447154c4aeb68526a729aa928db9e8e49908ff0f8bff8aa898e7590d38ddb'
+            '59cd2964764d83a611e312dcb95b5b3fb4a1550fe9f9bc57fca96f1277352380'
+            '83edec2403f7de50629a0e37f28f40a87fc6aae5531b768c2e84d37be90c4dd1'
+            '23e3189555d64c61966b0db0102b7e6b8805224118391786cd42d56acf975c2a'
+            '3d1f46948d53230bebe9b4287e6cfdfd6981697fe57897ecc3ac2b566d4556d0'
+            '7e1e4f7a5d6eab8ff7df40e7aa2de6f6a33af51c3452f8cf83b409896eb5a871'
+            'c1a16dfa508c21bdb677347e5a33283e45d05079c8a777a7ea09419439fdd3ca'
+            '9c43e96e7f25776249bc16c25796a3386892391bf3cdb79624e4af5dc8e38c83'
+            '897dbcf17d65e6ec44841fff7e821bb9ed9560fcd8a177fbdfa987ee8cfe158b'
+            'f521b0b8f0331e4f884aec46178d1d94cbc3ce83e0b2452603b06c4a355c47d3'
+            'fa97dbea1dd01a4e1e15f5d3bacd76fe2cdd70c792e78bb8a48b42dad9ec7229'
+            'dbd48330b2a28342e48a0b5f913d9fb247c26720535c882ddecb150942b6ff22'
+            '592d6ae9bd5fee19a86dcb86d120d58f8fcb92140c3ae73d4b8babb307eb90ff'
+            'd747c9f8cb42689e629255f88c5057b815dbd88586233e0c2ed6516f1bd40561'
+            'a0339ef63913668a579f73656f5ecc4dd8938766d51eb0135f1ab5ff393ee3c7'
+            'd7280650534637c0f1b5f771b4be9288f5eff6223284ad56e377cc6a1a0c4044'
+            'fa9f8d0e9873a58e0f61f86a7a84377632508aa1c70b94585286b54a5a2b84c3'
+            '76d330a60ae45b6293078f5bdbe96d7a602247fb5371507073006242dc99884f'
+            '3a608710ca7e0b7a12ee6a7bfc20b32259124519943700d74d427e012bebc9c9')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -189,51 +177,51 @@ prepare() {
 
   apply_patch_with_msg \
  \
-  0001-Mention-the-extremely-useful-small_printf-function.patch \
-  0002-Allow-native-symlinks-to-non-existing-targets-in-nat.patch \
-  0003-WIP-Handle-8-bit-characters-under-LOCALE-C.patch \
-  0004-Make-paths-WCS-MBS-conversion-explicit.patch \
-  0005-Use-MB_CUR_MAX-6-by-default.patch \
-  0006-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
-  0007-Fix-msys-library-name-in-import-libraries.patch \
-  0008-Rename-dll-from-cygwin-to-msys.patch \
-  0009-Add-functionality-for-converting-UNIX-paths-in-argum.patch \
-  0010-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch \
-  0011-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch \
-  0012-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch \
-  0013-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch \
-  0014-Do-not-convert-environment-for-strace.patch \
-  0015-strace.cc-Don-t-set-MSYS-noglob.patch \
-  0016-Add-debugging-for-strace-make_command_line.patch \
-  0017-strace-quiet-be-really-quiet.patch \
-  0018-path_conv-special-case-root-directory-to-have-traili.patch \
-  0019-When-converting-to-a-Unix-path-avoid-double-trailing.patch \
-  0020-msys2_path_conv-pass-PC_NOFULL-to-path_conv.patch \
-  0021-path-conversion-Introduce-ability-to-switch-off-conv.patch \
-  0022-dcrt0.cc-Untangle-allow_glob-from-winshell.patch \
-  0023-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch \
-  0024-Add-debugging-for-build_argv.patch \
-  0025-environ.cc-New-facility-environment-variable-MSYS2_E.patch \
-  0026-Introduce-the-enable_pcon-value-for-MSYS.patch \
-  0027-popen-call-usr-bin-sh-instead-of-bin-sh.patch \
-  0028-Expose-full-command-lines-to-other-Win32-processes-b.patch \
-  0029-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch \
-  0030-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch \
-  0031-kill-kill-Win32-processes-more-gently.patch \
-  0032-Cygwin-make-option-for-native-inner-link-handling.patch \
-  0033-docs-skip-building-texinfo-and-PDF-files.patch \
-  0034-install-libs-depend-on-the-toollibs.patch \
-  0035-POSIX-ify-the-SHELL-variable.patch \
-  0036-Handle-ORIGINAL_PATH-just-like-PATH.patch \
-  0037-uname-allow-setting-the-system-name-to-CYGWIN.patch \
-  0038-Pass-environment-variables-with-empty-values.patch \
-  0039-Optionally-disallow-empty-environment-values-again.patch \
-  0040-build_env-respect-the-MSYS-environment-variable.patch \
-  0041-Revert-Cygwin-Enable-dynamicbase-on-the-Cygwin-DLL-b.patch \
-  0042-Avoid-sharing-cygheaps-across-Cygwin-versions.patch \
-  0043-uname-report-msys2-runtime-commit-hash-too.patch \
-  0044-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch \
-  0045-fixup-Add-functionality-for-converting-UNIX-paths-in.patch \
+  0001-Fix-msys-library-name-in-import-libraries.patch \
+  0002-Rename-dll-from-cygwin-to-msys.patch \
+  0003-Add-functionality-for-converting-UNIX-paths-in-argum.patch \
+  0004-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch \
+  0005-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch \
+  0006-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch \
+  0007-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch \
+  0008-Do-not-convert-environment-for-strace.patch \
+  0009-strace.cc-Don-t-set-MSYS-noglob.patch \
+  0010-Add-debugging-for-strace-make_command_line.patch \
+  0011-strace-quiet-be-really-quiet.patch \
+  0012-path_conv-special-case-root-directory-to-have-traili.patch \
+  0013-When-converting-to-a-Unix-path-avoid-double-trailing.patch \
+  0014-msys2_path_conv-pass-PC_NOFULL-to-path_conv.patch \
+  0015-path-conversion-Introduce-ability-to-switch-off-conv.patch \
+  0016-dcrt0.cc-Untangle-allow_glob-from-winshell.patch \
+  0017-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch \
+  0018-Add-debugging-for-build_argv.patch \
+  0019-environ.cc-New-facility-environment-variable-MSYS2_E.patch \
+  0020-Introduce-the-enable_pcon-value-for-MSYS.patch \
+  0021-popen-call-usr-bin-sh-instead-of-bin-sh.patch \
+  0022-Expose-full-command-lines-to-other-Win32-processes-b.patch \
+  0023-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch \
+  0024-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch \
+  0025-kill-kill-Win32-processes-more-gently.patch \
+  0026-Cygwin-make-option-for-native-inner-link-handling.patch \
+  0027-docs-skip-building-texinfo-and-PDF-files.patch \
+  0028-install-libs-depend-on-the-toollibs.patch \
+  0029-POSIX-ify-the-SHELL-variable.patch \
+  0030-Handle-ORIGINAL_PATH-just-like-PATH.patch \
+  0031-uname-allow-setting-the-system-name-to-CYGWIN.patch \
+  0032-Pass-environment-variables-with-empty-values.patch \
+  0033-Optionally-disallow-empty-environment-values-again.patch \
+  0034-build_env-respect-the-MSYS-environment-variable.patch \
+  0035-Revert-Cygwin-Enable-dynamicbase-on-the-Cygwin-DLL-b.patch \
+  0036-Avoid-sharing-cygheaps-across-Cygwin-versions.patch \
+  0037-uname-report-msys2-runtime-commit-hash-too.patch \
+  0038-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch \
+  0039-fixup-Add-functionality-for-converting-UNIX-paths-in.patch \
+  0040-Mention-the-extremely-useful-small_printf-function.patch \
+  0041-Allow-native-symlinks-to-non-existing-targets-in-nat.patch \
+  0042-WIP-Handle-8-bit-characters-under-LOCALE-C.patch \
+  0043-Make-paths-WCS-MBS-conversion-explicit.patch \
+  0044-Use-MB_CUR_MAX-6-by-default.patch \
+  0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
   0046-Change-the-default-base-address-for-x86_64.patch
 }
 

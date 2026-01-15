@@ -59,7 +59,7 @@ die "Could not stage new patch set"
 in_sources="$(echo "$patches" | sed "{s/^/        /;:1;N;s/\\n/\\\\n        /;b1}")"
 in_prepare="$(echo "$patches" | sed -n '{:1;s|^|  |;H;${x;s/\n/ \\\\\\n/g;p;q};n;b1}')"
 sed -i -e "/^        0.*\.patch$/{:1;N;/[^)]$/b1;s|.*|$in_sources)|}" \
-	-e "/^ *apply_git_am_with_msg .*\\\\$/{s/.*/  apply_git_am_with_msg \\\\/p;:2;N;/[^}]$/b2;s|.*|$in_prepare\\n\\}|}" \
+	-e "/^ *apply_[^ ]*_with_msg .*\\\\$/{s/.*\(apply_[^ ]*\).*/  \1 \\\\/p;:2;N;/[^}]$/b2;s|.*|$in_prepare\\n\\}|}" \
 	-e "s/^\\(pkgver=\\).*/\\1${base_tag#refs/tags/cygwin-}/" \
 	PKGBUILD ||
 die "Could not update the patch set in PKGBUILD"
