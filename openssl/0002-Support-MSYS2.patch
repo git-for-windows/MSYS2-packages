@@ -1,8 +1,8 @@
 diff --git a/Configurations/10-main.conf b/Configurations/10-main.conf
-index b1719be..f68dc4e 100644
+index cba57b4..421283b 100644
 --- a/Configurations/10-main.conf
 +++ b/Configurations/10-main.conf
-@@ -1774,6 +1774,53 @@ my %targets = (
+@@ -1827,6 +1827,53 @@ my %targets = (
  	inherit_from     => [ "Cygwin-x86" ]
      },
  
@@ -101,10 +101,10 @@ index caf6f90..7fc7da2 100644
          return {
              %{$shared_info{'cygwin-shared'}},
 diff --git a/Configurations/unix-Makefile.tmpl b/Configurations/unix-Makefile.tmpl
-index dcd41a9..cd417de 100644
+index 78be4a3..db516a2 100644
 --- a/Configurations/unix-Makefile.tmpl
 +++ b/Configurations/unix-Makefile.tmpl
-@@ -8,7 +8,7 @@
+@@ -10,7 +10,7 @@
       our $makedep_scheme = $config{makedep_scheme};
       our $makedepcmd = platform->makedepcmd();
  
@@ -112,9 +112,9 @@ index dcd41a9..cd417de 100644
 +     sub windowsdll { $config{target} =~ /^(?:Cygwin|Msys|mingw)/ }
  
       # Shared AIX support is special. We put libcrypto[64].so.ver into
-      # libcrypto.a and use libcrypto_a.a as static one.
+      # libcrypto.a and use libcrypto_a.a as static one, unless using
 diff --git a/apps/build.info b/apps/build.info
-index 020d129..0069a55 100644
+index e9565c4..be29df7 100644
 --- a/apps/build.info
 +++ b/apps/build.info
 @@ -76,7 +76,7 @@ IF[{- !$disabled{apps} -}]
@@ -127,10 +127,10 @@ index 020d129..0069a55 100644
      SOURCE[openssl]=openssl.rc
    ENDIF
 diff --git a/build.info b/build.info
-index d9e3c90..1b1293c 100644
+index 22c7c8a..a91c280 100644
 --- a/build.info
 +++ b/build.info
-@@ -91,7 +91,7 @@ IF[{- defined $target{shared_defflag} -}]
+@@ -99,7 +99,7 @@ IF[{- defined $target{shared_defflag} -}]
    DEPEND[libcrypto.ld libssl.ld]=configdata.pm util/perl/OpenSSL/Ordinals.pm
  ENDIF
  
@@ -139,8 +139,21 @@ index d9e3c90..1b1293c 100644
    GENERATE[libcrypto.rc]=util/mkrc.pl libcrypto
    GENERATE[libssl.rc]=util/mkrc.pl libssl
    DEPEND[libcrypto.rc libssl.rc]=configdata.pm
+diff --git a/crypto/bio/bss_dgram.c b/crypto/bio/bss_dgram.c
+index dd14c39..a6e2211 100644
+--- a/crypto/bio/bss_dgram.c
++++ b/crypto/bio/bss_dgram.c
+@@ -1212,7 +1212,7 @@ static int pack_local(BIO *b, MSGHDR_TYPE *mh, const BIO_ADDR *local)
+         cmsg->cmsg_type = IP_PKTINFO;
+ 
+         info = (struct in_pktinfo *)BIO_CMSG_DATA(cmsg);
+-#if !defined(OPENSSL_SYS_WINDOWS) && !defined(OPENSSL_SYS_CYGWIN) && !defined(__FreeBSD__) && !defined(__QNX__)
++#if !defined(OPENSSL_SYS_WINDOWS) && !defined(OPENSSL_SYS_CYGWIN) && !defined(__FreeBSD__) && !defined(__QNX__) && !defined(OPENSSL_SYS_MSYS)
+         info->ipi_spec_dst = local->s_in.sin_addr;
+ #endif
+         info->ipi_addr.s_addr = 0;
 diff --git a/crypto/build.info b/crypto/build.info
-index 2d5b22f..11f08ab 100644
+index aee5c46..52a01b3 100644
 --- a/crypto/build.info
 +++ b/crypto/build.info
 @@ -140,6 +140,6 @@ GENERATE[riscv64cpuid.s]=riscv64cpuid.pl
@@ -151,11 +164,24 @@ index 2d5b22f..11f08ab 100644
 +IF[{- $config{target} =~ /^(?:Cygwin|Msys|mingw|VC-|BC-)/ -}]
    SHARED_SOURCE[../libcrypto]=dllmain.c
  ENDIF
+diff --git a/include/openssl/e_os2.h b/include/openssl/e_os2.h
+index 86a572b..68f787a 100644
+--- a/include/openssl/e_os2.h
++++ b/include/openssl/e_os2.h
+@@ -54,7 +54,7 @@ extern "C" {
+ #undef OPENSSL_SYS_UNIX
+ #define OPENSSL_SYS_WIN32_UWIN
+ #else
+-#if defined(__CYGWIN__) || defined(OPENSSL_SYS_CYGWIN)
++#if defined(__CYGWIN__) || defined(OPENSSL_SYS_CYGWIN) || defined(OPENSSL_SYS_MSYS)
+ #define OPENSSL_SYS_WIN32_CYGWIN
+ #else
+ #if defined(_WIN32) || defined(OPENSSL_SYS_WIN32)
 diff --git a/providers/build.info b/providers/build.info
-index 3b211bb..e420b0f 100644
+index 9277d8f..39963e5 100644
 --- a/providers/build.info
 +++ b/providers/build.info
-@@ -120,7 +120,7 @@ IF[{- !$disabled{fips} -}]
+@@ -121,7 +121,7 @@ IF[{- !$disabled{fips} -}]
    DEPEND[fipsmodule.cnf]=$FIPSGOAL
  
    # Add VERSIONINFO resource for windows
@@ -164,7 +190,7 @@ index 3b211bb..e420b0f 100644
      GENERATE[fips.rc]=../util/mkrc.pl fips
      SOURCE[$FIPSGOAL]=fips.rc
    ENDIF
-@@ -154,7 +154,7 @@ IF[{- !$disabled{legacy} -}]
+@@ -155,7 +155,7 @@ IF[{- !$disabled{legacy} -}]
      ENDIF
  
      # Add VERSIONINFO resource for windows
@@ -174,7 +200,7 @@ index 3b211bb..e420b0f 100644
        SOURCE[$LEGACYGOAL]=legacy.rc
      ENDIF
 diff --git a/tools/c_rehash.in b/tools/c_rehash.in
-index 4dd1b44..8fe3d80 100644
+index bb68c44..1ae8374 100644
 --- a/tools/c_rehash.in
 +++ b/tools/c_rehash.in
 @@ -21,6 +21,7 @@ my $x509hash = "-subject_hash";
@@ -186,7 +212,7 @@ index 4dd1b44..8fe3d80 100644
  
  ##  Parse flags.
 diff --git a/util/perl/OpenSSL/config.pm b/util/perl/OpenSSL/config.pm
-index 047902c..b6f56d2 100755
+index 04aef06..7f0ec61 100755
 --- a/util/perl/OpenSSL/config.pm
 +++ b/util/perl/OpenSSL/config.pm
 @@ -164,6 +164,7 @@ my $guess_patterns = [
@@ -197,29 +223,3 @@ index 047902c..b6f56d2 100755
      [ 'vxworks.*',                  '${MACHINE}-whatever-vxworks' ],
  
      # The MACHINE part of the array POSIX::uname() returns on VMS isn't
-diff --git a/crypto/bio/bss_dgram.c b/crypto/bio/bss_dgram.c
-index 69f3b48..7df025f 100644
---- a/crypto/bio/bss_dgram.c
-+++ b/crypto/bio/bss_dgram.c
-@@ -1192,7 +1192,7 @@ static int pack_local(BIO *b, MSGHDR_TYPE *mh, const BIO_ADDR *local) {
-         cmsg->cmsg_type  = IP_PKTINFO;
- 
-         info = (struct in_pktinfo *)BIO_CMSG_DATA(cmsg);
--#   if !defined(OPENSSL_SYS_WINDOWS) && !defined(OPENSSL_SYS_CYGWIN) && !defined(__FreeBSD__) && !defined(__QNX__)
-+#   if !defined(OPENSSL_SYS_WINDOWS) && !defined(OPENSSL_SYS_CYGWIN) && !defined(__FreeBSD__) && !defined(__QNX__) && !defined(OPENSSL_SYS_MSYS)
-         info->ipi_spec_dst      = local->s_in.sin_addr;
- #   endif
-         info->ipi_addr.s_addr   = 0;
-diff --git a/include/openssl/e_os2.h b/include/openssl/e_os2.h
-index f1e1795..412cfff 100644
---- a/include/openssl/e_os2.h
-+++ b/include/openssl/e_os2.h
-@@ -54,7 +54,7 @@ extern "C" {
- #  undef OPENSSL_SYS_UNIX
- #  define OPENSSL_SYS_WIN32_UWIN
- # else
--#  if defined(__CYGWIN__) || defined(OPENSSL_SYS_CYGWIN)
-+#  if defined(__CYGWIN__) || defined(OPENSSL_SYS_CYGWIN) || defined(OPENSSL_SYS_MSYS)
- #   define OPENSSL_SYS_WIN32_CYGWIN
- #  else
- #   if defined(_WIN32) || defined(OPENSSL_SYS_WIN32)
