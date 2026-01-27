@@ -1,7 +1,9 @@
+diff --git a/apps/CA.pl.in b/apps/CA.pl.in
+index 0bad37d..36d250b 100644
 --- a/apps/CA.pl.in
 +++ b/apps/CA.pl.in
-@@ -29,7 +29,7 @@
- my $PKCS12 = "$openssl pkcs12";
+@@ -32,7 +32,7 @@ my @X509 = (@openssl, "x509");
+ my @PKCS12 = (@openssl, "pkcs12");
  
  # Default values for various configuration settings.
 -my $CATOP = "./demoCA";
@@ -9,9 +11,11 @@
  my $CAKEY = "cakey.pem";
  my $CAREQ = "careq.pem";
  my $CACERT = "cacert.pem";
+diff --git a/apps/openssl.cnf b/apps/openssl.cnf
+index abace0e..2aec482 100644
 --- a/apps/openssl.cnf
 +++ b/apps/openssl.cnf
-@@ -79,7 +79,7 @@
+@@ -79,7 +79,7 @@ default_ca	= CA_default		# The default ca section
  ####################################################################
  [ CA_default ]
  
@@ -20,7 +24,7 @@
  certs		= $dir/certs		# Where the issued certs are kept
  crl_dir		= $dir/crl		# Where the issued crl are kept
  database	= $dir/index.txt	# database index file.
-@@ -309,7 +309,7 @@
+@@ -309,7 +309,7 @@ default_tsa = tsa_config1	# the default TSA section
  [ tsa_config1 ]
  
  # These are used by the TSA reply generation only.

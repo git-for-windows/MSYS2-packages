@@ -1,8 +1,8 @@
 diff --git a/Configurations/unix-Makefile.tmpl b/Configurations/unix-Makefile.tmpl
-index cd417de..a9adb3e 100644
+index db516a2..a3e538c 100644
 --- a/Configurations/unix-Makefile.tmpl
 +++ b/Configurations/unix-Makefile.tmpl
-@@ -305,8 +305,8 @@ LIBDIR={- our $libdir = $config{libdir};
+@@ -333,8 +333,8 @@ LIBDIR={- our $libdir = $config{libdir};
  # $(libdir) is chosen to be compatible with the GNU coding standards
  libdir={- file_name_is_absolute($libdir)
            ? $libdir : '$(INSTALLTOP)/$(LIBDIR)' -}
