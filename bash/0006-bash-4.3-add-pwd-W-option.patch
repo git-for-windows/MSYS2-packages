@@ -27,9 +27,9 @@ index b87c5d9..5e4e78e 100644
  
  By default, `pwd' behaves as if `-L' were specified.
  
-@@ -485,13 +488,13 @@ int
- pwd_builtin (list)
-      WORD_LIST *list;
+@@ -456,13 +459,13 @@ static int verbatim_pwd;
+ int
+ pwd_builtin (WORD_LIST *list)
  {
 -  char *directory;
 +  char *directory, *buffer, *wbuffer;
