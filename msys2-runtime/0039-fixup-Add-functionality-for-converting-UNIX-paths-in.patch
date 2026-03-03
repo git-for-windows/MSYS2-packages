@@ -1,4 +1,4 @@
-From ef4d5ced02789110472acadc9da6653a48d0cf99 Mon Sep 17 00:00:00 2001
+From 520e5c933ddc43cc5d84bea5f9a856e6b29cedd7 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=EB=A7=88=EB=88=84=EC=97=98?= <nalla@hamal.uberspace.de>
 Date: Mon, 9 Mar 2015 16:24:43 +0100
 Subject: [PATCH 39/N] fixup! Add functionality for converting UNIX paths in

@@ -1,4 +1,4 @@
-From 6e3b0e11f2d117e6bfd56411e368fe24da9be07a Mon Sep 17 00:00:00 2001
+From 0ee34fbd29b64bbbd888d2f15373fdfec1c80706 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Fri, 20 Feb 2015 13:56:22 +0000
 Subject: [PATCH 42/N] WIP Handle 8-bit characters under LOCALE=C
@@ -19,10 +19,10 @@ Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
  1 file changed, 4 insertions(+)
 
 diff --git a/winsup/cygwin/strfuncs.cc b/winsup/cygwin/strfuncs.cc
-index eb657605..4542003 100644
+index 0cf41ce..ced11f0 100644
 --- a/winsup/cygwin/strfuncs.cc
 +++ b/winsup/cygwin/strfuncs.cc
-@@ -1189,7 +1189,11 @@ _sys_mbstowcs (mbtowc_p f_mbtowc, wchar_t *dst, size_t dlen, const char *src,
+@@ -1196,7 +1196,11 @@ _sys_mbstowcs (mbtowc_p f_mbtowc, wchar_t *dst, size_t dlen, const char *src,
  	    {
  	      bytes = 1;
  	      if (dst)

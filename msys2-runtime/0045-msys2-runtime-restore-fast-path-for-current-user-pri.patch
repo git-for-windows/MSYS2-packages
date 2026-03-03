@@ -1,4 +1,4 @@
-From 1aafca5beba9cfc906aafc285ae6c5a3ca6c4a07 Mon Sep 17 00:00:00 2001
+From 143d32363e1797664bbe3d86bb6df381175408b6 Mon Sep 17 00:00:00 2001
 From: Richard Glidden <rglidden@brocksolutions.com>
 Date: Thu, 24 Aug 2023 13:36:10 -0400
 Subject: [PATCH 45/N] msys2-runtime: restore fast path for current user
@@ -55,10 +55,10 @@ index d9e936c..0b3fed2 100644
    inline bool nss_cygserver_caching () const { return caching; }
    inline void nss_disable_cygserver_caching () { caching = false; }
 diff --git a/winsup/cygwin/uinfo.cc b/winsup/cygwin/uinfo.cc
-index 446d8a7..0b4e372 100644
+index 3d3b804..375a016 100644
 --- a/winsup/cygwin/uinfo.cc
 +++ b/winsup/cygwin/uinfo.cc
-@@ -644,6 +644,11 @@ cygheap_pwdgrp::nss_init_line (const char *line)
+@@ -643,6 +643,11 @@ cygheap_pwdgrp::nss_init_line (const char *line)
  		    *src |= NSS_SRC_DB;
  		    c += 2;
  		  }
@@ -70,7 +70,7 @@ index 446d8a7..0b4e372 100644
  		else
  		  {
  		    c += strcspn (c, " \t");
-@@ -1959,6 +1964,7 @@ pwdgrp::fetch_account_from_windows (fetch_user_arg_t &arg, cyg_ldap *pldap)
+@@ -1958,6 +1963,7 @@ pwdgrp::fetch_account_from_windows (fetch_user_arg_t &arg, bool ugid_caching, cy
    gid_t gid = ILLEGAL_GID;
    bool is_domain_account = true;
    PCWSTR domain = NULL;
@@ -78,7 +78,7 @@ index 446d8a7..0b4e372 100644
    char *shell = NULL;
    char *home = NULL;
    char *gecos = NULL;
-@@ -2473,9 +2479,19 @@ pwdgrp::fetch_account_from_windows (fetch_user_arg_t &arg, cyg_ldap *pldap)
+@@ -2472,9 +2478,19 @@ pwdgrp::fetch_account_from_windows (fetch_user_arg_t &arg, bool ugid_caching, cy
  	    uid = posix_offset + sid_sub_auth_rid (sid);
  	  if (!is_group () && acc_type == SidTypeUser)
  	    {
@@ -101,7 +101,7 @@ index 446d8a7..0b4e372 100644
  	    }
  
  	  if (is_domain_account)
-@@ -2483,9 +2499,11 @@ pwdgrp::fetch_account_from_windows (fetch_user_arg_t &arg, cyg_ldap *pldap)
+@@ -2482,9 +2498,11 @@ pwdgrp::fetch_account_from_windows (fetch_user_arg_t &arg, bool ugid_caching, cy
  	      /* Skip this when creating group entries and for non-users. */
  	      if (is_group() || acc_type != SidTypeUser)
  		break;

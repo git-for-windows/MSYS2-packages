@@ -1,4 +1,4 @@
-From 8d7b2c2b179807c4169ac4f1c38d29149682c796 Mon Sep 17 00:00:00 2001
+From 74ca85b004e68f940e862917f2b28c0757a44d11 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Fri, 18 Dec 2015 20:19:57 +0100
 Subject: [PATCH 43/N] Make paths' WCS->MBS conversion explicit
@@ -562,10 +562,10 @@ index bcde89c..e97ae80 100644
      }
    else
 diff --git a/winsup/cygwin/uinfo.cc b/winsup/cygwin/uinfo.cc
-index 446d8a7..a463126 100644
+index 3d3b804..addaed1 100644
 --- a/winsup/cygwin/uinfo.cc
 +++ b/winsup/cygwin/uinfo.cc
-@@ -392,12 +392,12 @@ cygheap_user::ontherange (homebodies what, struct passwd *pw)
+@@ -391,12 +391,12 @@ cygheap_user::ontherange (homebodies what, struct passwd *pw)
  	    {
  	      if (ui->usri3_home_dir_drive && *ui->usri3_home_dir_drive)
  		{
@@ -580,7 +580,7 @@ index 446d8a7..a463126 100644
  			      ui->usri3_home_dir);
  	    }
  	  if (ui)
-@@ -407,7 +407,7 @@ cygheap_user::ontherange (homebodies what, struct passwd *pw)
+@@ -406,7 +406,7 @@ cygheap_user::ontherange (homebodies what, struct passwd *pw)
        if (!homepath_env_buf[0]
  	  && get_user_profile_directory (get_windows_id (win_id),
  					 profile, MAX_PATH))
@@ -589,7 +589,7 @@ index 446d8a7..a463126 100644
        /* Last fallback: Cygwin root dir. */
        if (!homepath_env_buf[0])
  	cygwin_conv_path (CCP_POSIX_TO_WIN_A | CCP_ABSOLUTE,
-@@ -926,7 +926,7 @@ fetch_from_path (cyg_ldap *pldap, PUSER_INFO_3 ui, cygpsid &sid, PCWSTR str,
+@@ -925,7 +925,7 @@ fetch_from_path (cyg_ldap *pldap, PUSER_INFO_3 ui, cygpsid &sid, PCWSTR str,
  	}
      }
    *w = L'\0';
@@ -598,7 +598,7 @@ index 446d8a7..a463126 100644
    return ret;
  }
  
-@@ -994,7 +994,7 @@ cygheap_pwdgrp::get_home (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
+@@ -993,7 +993,7 @@ cygheap_pwdgrp::get_home (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
  	    {
  	      val = pldap->get_string_attribute (L"cygwinHome");
  	      if (val && *val)
@@ -607,7 +607,7 @@ index 446d8a7..a463126 100644
  	    }
  	  break;
  	case NSS_SCHEME_UNIX:
-@@ -1002,7 +1002,7 @@ cygheap_pwdgrp::get_home (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
+@@ -1001,7 +1001,7 @@ cygheap_pwdgrp::get_home (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
  	    {
  	      val = pldap->get_string_attribute (L"unixHomeDirectory");
  	      if (val && *val)
@@ -616,7 +616,7 @@ index 446d8a7..a463126 100644
  	    }
  	  break;
  	case NSS_SCHEME_DESC:
-@@ -1027,7 +1027,7 @@ cygheap_pwdgrp::get_home (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
+@@ -1026,7 +1026,7 @@ cygheap_pwdgrp::get_home (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
  		    home = (char *)
  			   cygwin_create_path (CCP_WIN_W_TO_POSIX, val);
  		  else
@@ -625,7 +625,7 @@ index 446d8a7..a463126 100644
  		}
  	    }
  	  break;
-@@ -1097,7 +1097,7 @@ cygheap_pwdgrp::get_shell (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
+@@ -1096,7 +1096,7 @@ cygheap_pwdgrp::get_shell (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
  	    {
  	      val = pldap->get_string_attribute (L"cygwinShell");
  	      if (val && *val)
@@ -634,7 +634,7 @@ index 446d8a7..a463126 100644
  	    }
  	  break;
  	case NSS_SCHEME_UNIX:
-@@ -1105,7 +1105,7 @@ cygheap_pwdgrp::get_shell (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
+@@ -1104,7 +1104,7 @@ cygheap_pwdgrp::get_shell (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
  	    {
  	      val = pldap->get_string_attribute (L"loginShell");
  	      if (val && *val)
@@ -643,7 +643,7 @@ index 446d8a7..a463126 100644
  	    }
  	  break;
  	case NSS_SCHEME_DESC:
-@@ -1130,7 +1130,7 @@ cygheap_pwdgrp::get_shell (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
+@@ -1129,7 +1129,7 @@ cygheap_pwdgrp::get_shell (cyg_ldap *pldap, cygpsid &sid, PCWSTR dom,
  		    shell = (char *)
  			    cygwin_create_path (CCP_WIN_W_TO_POSIX, val);
  		  else
