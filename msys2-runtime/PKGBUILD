@@ -255,6 +255,10 @@ build() {
     --build=${CHOST} \
     --sysconfdir=/etc \
     "${extra_config[@]}"
+  # Work around `LC_ALL=C gawk` bug in Git for Windows
+  (cd /usr/bin &&
+   powershell -command '"#!/bin/sh`n`nLC_ALL=C.UTF-8 exec gawk.exe `"`$@`"" | Out-File -Encoding ascii -FilePath gawk' &&
+   powershell -command '"#!/bin/sh`n`nLC_ALL=C.UTF-8 exec awk.exe `"`$@`"" | Out-File -Encoding ascii -FilePath awk')
   LC_ALL=C make
   LC_ALL=C make -j1 DESTDIR="${srcdir}"/dest install
 
