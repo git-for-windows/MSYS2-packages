@@ -1,4 +1,4 @@
-From 1f24813783442bf9dac53900f35d076499702f04 Mon Sep 17 00:00:00 2001
+From 37e744563dd0f2d52c1e5e903d24dddd85a65ad2 Mon Sep 17 00:00:00 2001
 From: Karsten Blees <blees@dcon.de>
 Date: Wed, 20 May 2015 16:32:52 +0200
 Subject: [PATCH 41/N] Allow native symlinks to non-existing targets in

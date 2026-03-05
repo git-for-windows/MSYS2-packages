@@ -1,4 +1,4 @@
-From eb83ba796a2c3c6dc52603aa8af65cc130c0eac7 Mon Sep 17 00:00:00 2001
+From ea6fb84bcdcc7eaa47acdc09508ddd83645f0a2b Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Fri, 20 Feb 2015 11:54:47 +0000
 Subject: [PATCH 40/N] Mention the extremely useful small_printf() function
