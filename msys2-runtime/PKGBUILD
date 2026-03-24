@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.7
-pkgrel=1
+pkgrel=2
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -73,9 +73,10 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0043-Make-paths-WCS-MBS-conversion-explicit.patch
         0044-Use-MB_CUR_MAX-6-by-default.patch
         0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch
-        0046-Change-the-default-base-address-for-x86_64.patch)
+        0046-Change-the-default-base-address-for-x86_64.patch
+        0047-fixup-Use-MB_CUR_MAX-6-by-default.patch)
 sha256sums=('4ecc8ac443ed3f0568e9b2f95aafa9f412669466bfb0dd5cfbb194b572538916'
-            '270ec7c42ed579e337807479f7f836776b4a8d61c56dbf62c23cfd342cdbb0de'
+            'c31268394bbe6094e590b5c019aaf2e25f5d5fa4c2cb0bc37a01218af9c4bd14'
             'fd5fca07f5febedd4be73af01613847568aec1e6dd1f0aa39658f9c946ae2812'
             'c5d502a01a7206ef26572674cc081e71c11e4796b1ffae7ee06c8afd546abf53'
             '432af98a8df514b3dbf2c6d6a82f19b561b40b109466f8eecc2c74ad5cc03b86'
@@ -121,7 +122,8 @@ sha256sums=('4ecc8ac443ed3f0568e9b2f95aafa9f412669466bfb0dd5cfbb194b572538916'
             'cab9067f1812f5f1103830a8d3f203418a157e145d559fdfcce582cb81ec8026'
             '4898546fae614b07aae22beba2246a9bcb909f9486d3423321172920d165db2d'
             '4d6e3eb36d418eb967d63087a48420d48c911c156631989465351fc0f345f289'
-            'c89414545dacfedc30bb48c54ff1f6a89b32a8cfceb6342ef1050bfb12fff20e')
+            'c89414545dacfedc30bb48c54ff1f6a89b32a8cfceb6342ef1050bfb12fff20e'
+            'bcf9839f2fda676542c85c08d6f612b4c854b2a273f96473d8d49b371014edb8')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {

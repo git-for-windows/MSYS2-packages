@@ -1,0 +1,56 @@
+From 4c22b036e83e1a1fe71637a9455da3d9c8838d77 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 4 Mar 2026 14:40:29 +0100
+Subject: [PATCH 47/N] fixup! Use MB_CUR_MAX == 6 by default
+
+This was designed to fix the problem where double-clicking `.sh` scripts
+in Windows Explorer with non-ASCII filenames would not execute the
+scripts, see https://github.com/git-for-windows/git/issues/2189
+
+However, this patch is broken, as became apparent when I no longer could
+build Git for Windows' MSYS2 runtime after the gawk update to v5.4.0.
+The part of the build that is failing is where it generated the
+`tlsoffsets` file. In particular, with `LC_ALL=C` the following
+invocation:
+
+	printf 'void (*func) (int, siginfo_t *, void *);\n' |
+	gawk '
+	  {
+	      # Filter out function names
+	      print gensub (/\(\*(\w+)\)\s*\([^\)]*\)/, "\\1", "g");
+	  }
+	'
+
+does not print the expected:
+
+	void func;
+
+but instead:
+
+	void (*func) (int, siginfo_t *, void *);
+
+I did verify that the scripts with umlauts in their filenames can still
+be executed via double-clicking, even after reverting this here patch.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ newlib/libc/locale/lctype.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/newlib/libc/locale/lctype.c b/newlib/libc/locale/lctype.c
+index 3f118e9..a07ab68 100644
+--- a/newlib/libc/locale/lctype.c
++++ b/newlib/libc/locale/lctype.c
+@@ -25,12 +25,7 @@
+ 
+ #define LCCTYPE_SIZE (sizeof(struct lc_ctype_T) / sizeof(char *))
+ 
+-#ifdef __CYGWIN__
+-/* Cygwin uses __utf8_mbtowc() by default, therefore mb_cur_max := 6 */
+-static char	numone[] = { '\x06', '\0'};
+-#else
+ static char	numone[] = { '\1', '\0'};
+-#endif
+ 
+ const struct lc_ctype_T _C_ctype_locale = {
+ 	"ASCII",			/* codeset */
