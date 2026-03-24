@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.7
-pkgrel=2
+pkgrel=3
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -224,7 +224,8 @@ prepare() {
   0043-Make-paths-WCS-MBS-conversion-explicit.patch \
   0044-Use-MB_CUR_MAX-6-by-default.patch \
   0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
-  0046-Change-the-default-base-address-for-x86_64.patch
+  0046-Change-the-default-base-address-for-x86_64.patch \
+  0047-fixup-Use-MB_CUR_MAX-6-by-default.patch
 }
 
 build() {
