@@ -1,0 +1,165 @@
+From d2355119f7c6fafc74a4c8595f15baffb6b5d364 Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Sat, 28 Mar 2026 19:55:50 +0900
+Subject: [PATCH 57/N] Cygwin: pty: Guard to_be_read_from_nat_pipe() by
+ pipe_sw_mutex
+
+`to_be_read_from_nat_pipe()` reads several shared-memory fields
+(`switch_to_nat_pipe`, `pcon_activated`, `pty_input_state`) to
+decide whether keystrokes should go to the nat pipe. It is called
+from `master::write()` on every keystroke. Without synchronization,
+the slave can be in the middle of a pipe switch (changing these
+fields in `setup_for_non_cygwin_app()`, `cleanup_for_non_cygwin_app()`,
+or `setpgid_aux()`) while the master reads a half-updated snapshot,
+making an inconsistent routing decision that sends keystrokes to the
+wrong pipe.
+
+Guard `to_be_read_from_nat_pipe()` with `pipe_sw_mutex` so it
+always reads a consistent state. The spin-wait at entry handles the
+pseudo console initialization case: when `pipe_sw_mutex` is held by
+the slave during `setup_pseudoconsole()` and `pcon_start` is set,
+the function returns false immediately, routing keystrokes to the
+cyg pipe through `line_edit()` where the CSI6n response handler
+expects them.
+
+Acquiring `pipe_sw_mutex` inside `to_be_read_from_nat_pipe()`
+creates a lock ordering constraint: `master::write()` holds
+`input_mutex` before calling `to_be_read_from_nat_pipe()`, so the
+master's lock order is `input_mutex` then `pipe_sw_mutex`.
+Previously, `cleanup_for_non_cygwin_app()` and `setpgid_aux()`
+acquired `pipe_sw_mutex` first and then `input_mutex` (for
+`transfer_input()`), which is the reverse order and would deadlock.
+Restructure both functions to release `pipe_sw_mutex` before
+acquiring `input_mutex`, maintaining a consistent lock order
+throughout.
+
+Fixes: bb4285206207 ("Cygwin: pty: Implement new pseudo console support.")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/pty.cc | 48 +++++++++++++++++++++++++----------
+ 1 file changed, 34 insertions(+), 14 deletions(-)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index d6817cb..4a628ea 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -1283,22 +1283,42 @@ fhandler_pty_slave::mask_switch_to_nat_pipe (bool mask, bool xfer)
+ bool
+ fhandler_pty_common::to_be_read_from_nat_pipe (void)
+ {
++  /* If the slave is in setup_pseudoconsole(), pipe_sw_mutex cannot
++     be acquired because the slave has it. In this case pcon_start
++     will be asserted. During pcon_start, other input than response
++     to CSI6n should be go to cyg-pipe. So, wait for pcon_start and
++     return false. */
++  while (WaitForSingleObject (pipe_sw_mutex, 0) == WAIT_TIMEOUT)
++    if (get_ttyp ()->pcon_start || get_ttyp ()->pcon_start_pid)
++      return false;
++    else
++      yield ();
++
++  bool ret = false;
+   if (!get_ttyp ()->switch_to_nat_pipe)
+-    return false;
++    goto out;
+ 
+-  char name[MAX_PATH];
+-  shared_name (name, TTY_SLAVE_READING, get_minor ());
+-  HANDLE masked = OpenEvent (READ_CONTROL, FALSE, name);
+-  CloseHandle (masked);
++  {
++    char name[MAX_PATH];
++    shared_name (name, TTY_SLAVE_READING, get_minor ());
++    HANDLE masked = OpenEvent (READ_CONTROL, FALSE, name);
++    CloseHandle (masked);
+ 
+-  if (masked) /* The foreground process is cygwin process */
+-    return false;
++    if (masked) /* The foreground process is cygwin process */
++      goto out;
++  }
+ 
+   if (!pinfo (get_ttyp ()->getpgid ()))
+     /* GDB may set invalid process group for non-cygwin process. */
+-    return true;
++    {
++      ret = true;
++      goto out;
++    }
+ 
+-  return get_ttyp ()->nat_fg (get_ttyp ()->getpgid ());
++  ret = get_ttyp ()->nat_fg (get_ttyp ()->getpgid ());
++out:
++  ReleaseMutex (pipe_sw_mutex);
++  return ret;
+ }
+ 
+ void
+@@ -3901,7 +3921,6 @@ fhandler_pty_slave::term_has_pcon_cap (const WCHAR *env)
+     goto maybe_dumb;
+ 
+   /* Check if terminal has CSI6n */
+-  WaitForSingleObject (pipe_sw_mutex, INFINITE);
+   WaitForSingleObject (input_mutex, mutex_timeout);
+   /* Set pcon_activated and pcon_start so that the response
+      will sent to io_handle_nat rather than io_handle. */
+@@ -3937,7 +3956,6 @@ fhandler_pty_slave::term_has_pcon_cap (const WCHAR *env)
+   while (len);
+   get_ttyp ()->pcon_activated = false;
+   get_ttyp ()->nat_pipe_owner_pid = 0;
+-  ReleaseMutex (pipe_sw_mutex);
+   if (len == 0)
+     goto not_has_csi6n;
+ 
+@@ -3953,7 +3971,6 @@ not_has_csi6n:
+   get_ttyp ()->pcon_start = false;
+   get_ttyp ()->pcon_activated = false;
+   ReleaseMutex (input_mutex);
+-  ReleaseMutex (pipe_sw_mutex);
+ maybe_dumb:
+   get_ttyp ()->pcon_cap_checked = true;
+   return false;
+@@ -4274,7 +4291,6 @@ fhandler_pty_slave::cleanup_for_non_cygwin_app (handle_set_t *p, tty *ttyp,
+ 						DWORD force_switch_to)
+ {
+   ttyp->wait_fwd ();
+-  WaitForSingleObject (p->pipe_sw_mutex, INFINITE);
+   if (nat_pipe_owner_self (ttyp->nat_pipe_owner_pid))
+     {
+       DWORD switch_to = get_winpid_to_hand_over (ttyp, force_switch_to);
+@@ -4290,6 +4306,7 @@ fhandler_pty_slave::cleanup_for_non_cygwin_app (handle_set_t *p, tty *ttyp,
+ 	  ReleaseMutex (p->input_mutex);
+ 	}
+     }
++  WaitForSingleObject (p->pipe_sw_mutex, INFINITE);
+   if (ttyp->pcon_activated)
+     close_pseudoconsole (ttyp, force_switch_to);
+   else
+@@ -4308,6 +4325,7 @@ fhandler_pty_slave::setpgid_aux (pid_t pid)
+   if (!was_nat_fg && nat_fg && get_ttyp ()->switch_to_nat_pipe
+       && get_ttyp ()->pty_input_state_eq (tty::to_cyg))
+     {
++      ReleaseMutex (pipe_sw_mutex);
+       WaitForSingleObject (input_mutex, mutex_timeout);
+       acquire_attach_mutex (mutex_timeout);
+       transfer_input (tty::to_nat, get_handle (), get_ttyp (),
+@@ -4318,6 +4336,7 @@ fhandler_pty_slave::setpgid_aux (pid_t pid)
+   else if (was_nat_fg && !nat_fg && get_ttyp ()->switch_to_nat_pipe
+ 	   && get_ttyp ()->pty_input_state_eq (tty::to_nat))
+     {
++      ReleaseMutex (pipe_sw_mutex);
+       bool attach_restore = false;
+       HANDLE from = get_handle_nat ();
+       DWORD resume_pid = 0;
+@@ -4345,7 +4364,8 @@ fhandler_pty_slave::setpgid_aux (pid_t pid)
+ 	release_attach_mutex ();
+       ReleaseMutex (input_mutex);
+     }
+-  ReleaseMutex (pipe_sw_mutex);
++  else
++    ReleaseMutex (pipe_sw_mutex);
+ }
+ 
+ bool

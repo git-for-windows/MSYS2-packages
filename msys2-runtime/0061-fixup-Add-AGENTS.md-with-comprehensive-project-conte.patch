@@ -1,0 +1,237 @@
+From fb42d71358dd896ab324c52970f7d03f9ab0dfe5 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 27 Mar 2026 09:47:14 +0100
+Subject: [PATCH 61/N] fixup! Add AGENTS.md with comprehensive project context
+ for AI agents
+
+The PTY architecture section contained several claims that were proven
+incorrect by Takashi Yano's v7 patch series for the keystroke reordering bug
+(https://inbox.sourceware.org/cygwin-patches/20260325130453.62246-1-takashi.yano@nifty.ne.jp/).
+This session (https://github.com/git-for-windows/msys2-runtime/pull/124) spent
+multiple weeks attempting to fix the bug with a 4-patch series that was
+ultimately replaced entirely by Takashi's 9-patch series (merged via
+c6d1b52813). The AGENTS.md content reflected the incorrect mental model that
+led to our wrong patches.
+
+The most consequential error was the claim that transfer_input() calls in
+master::write() "steal readline's data" and should be removed. In fact, those
+transfers are essential: when a native process does not read stdin, keystrokes
+accumulate in conhost's console input buffer as INPUT_RECORD events. At
+cleanup, transfer_input(to_cyg) reads them back via ReadConsoleInputA() and
+writes them to the cyg pipe for bash's readline. Removing the transfers lost
+data instead of fixing the reordering.
+
+The reordering itself was caused by split delivery: some keystrokes went to the
+nat pipe (fast path) while others leaked to the cyg pipe (line_edit
+fallthrough) during transitions. The bytes that went directly to the cyg pipe
+arrived at readline before the bytes that were transferred from the nat pipe at
+cleanup, producing scrambled output. Takashi's fix was to drop the nat_fg()
+check from to_be_read_from_nat_pipe() (v7 7/7), ensuring keystrokes always go
+to the nat pipe while switch_to_nat_pipe is set, and to add pipe_sw_mutex
+synchronization to to_be_read_from_nat_pipe() (v7 6/7) so the master cannot
+read inconsistent state during pipe switching.
+
+Key corrections to AGENTS.md:
+
+The "Designed Keystroke Lifecycle" section is entirely new. It documents the
+full roundtrip that keystrokes take when a native process is in the foreground:
+master writes to nat pipe, conhost stores INPUT_RECORDs, cleanup transfers them
+back to cyg pipe, readline receives them. This roundtrip was completely absent
+from the previous version and its absence led directly to the wrong diagnosis
+(we assumed keystrokes sent to conhost were "consumed" and "lost").
+
+The to_be_read_from_nat_pipe() description previously stated that the function
+checks nat_fg(). The corrected version explicitly states that nat_fg() must NOT
+be checked, because doing so creates a gap between native process exit and
+cleanup where keystrokes fall through to the cyg pipe, causing the split
+delivery that produces reordering.
+
+The transfer_input() description previously warned that it "is only correct at
+process-group boundaries" and that "per-keystroke transfers in master::write()
+were historically a source of character reordering." Both claims were wrong.
+The transfers in master::write() (specifically the pcon_start completion block)
+serve the essential purpose of moving typeahead to the nat pipe after pcon
+initialization. Takashi's v7 4/7 adds an input_transferred_to_cyg
+synchronization event so that transferred bytes go through line_edit() in the
+forward thread, ensuring proper line discipline processing.
+
+The reset_switch_to_nat_pipe() description previously documented a "two-level
+guard" that checked pcon_activated and switch_to_nat_pipe when the owner is
+self. That was our incorrect patch 3/4. Takashi's correct design is simpler:
+only return early if a DIFFERENT process owns the nat pipe and is alive. When
+the owner is self or dead, proceed to cleanup.
+
+The oscillation section previously claimed that "transfer code paths have been
+removed" and that "setpgid_aux() in the slave is now the sole authority for
+pipe transfers." Both were wrong. The correct design principle is that
+keystrokes must always go to the nat pipe while switch_to_nat_pipe is set,
+regardless of oscillation. The transfers remain in place and are essential.
+
+The mutex section now documents attach_mutex (the third cross-process mutex,
+used by get_winpid_to_hand_over() per Takashi's v7 5/7) and notes the
+consistent lock ordering (pipe_sw_mutex first, then input_mutex).
+
+The debugging tips now include "study existing upstream patches before writing
+fixes" and "never remove transfer_input() calls without understanding what they
+transfer," both learned the hard way from this session's failures.
+
+Assisted-by: Claude Opus 4.6 (1M context)
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ AGENTS.md | 88 ++++++++++++++++++++++++++++++++++---------------------
+ 1 file changed, 55 insertions(+), 33 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 67b3945..e05270a 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -208,6 +208,29 @@ Each PTY has **two independent pipe pairs** for input, serving different consume
+ 
+ For **output**, there is a corresponding pair (`to_master` / `to_master_nat`) plus a forwarding thread (`master_fwd_thread`) that copies output from the nat pipe's slave side (`from_slave_nat`) to the cyg pipe's master side (`to_master`), so the terminal emulator (mintty) always reads from one place.
+ 
++### The Designed Keystroke Lifecycle
++
++Understanding the full lifecycle of a keystroke is essential. The design intent is that **no keystroke is ever lost**, regardless of what the foreground process does with it. The lifecycle differs between Cygwin and native foreground processes:
++
++**When a Cygwin process is in the foreground (e.g., bash):**
++1. Terminal emulator writes keystroke via `master::write()`
++2. `master::write()` calls `line_edit()` which applies POSIX line discipline
++3. `accept_input()` writes processed bytes to the cyg pipe
++4. The Cygwin slave (bash) reads from the cyg pipe
++
++**When a native process is in the foreground with pcon active:**
++1. Terminal emulator writes keystroke via `master::write()`
++2. `master::write()` fast path writes directly to `to_slave_nat` (nat pipe)
++3. Conhost (the pseudo console host) reads from the nat pipe, converts the byte stream to `INPUT_RECORD` events, and stores them in its console input buffer
++4. If the native process reads stdin: it gets `INPUT_RECORD` events via `ReadConsoleInput()`
++5. If the native process does NOT read stdin (common for background tasks): the `INPUT_RECORD` events accumulate in conhost's buffer
++6. When the native process exits: `cleanup_for_non_cygwin_app()` calls `transfer_input(to_cyg)`, which reads all pending `INPUT_RECORD` events from the console buffer via `ReadConsoleInputA()`, converts them back to bytes, and writes them to the cyg pipe
++7. Bash's readline then receives these bytes as if they had been typed directly
++
++**Step 6 is critical and easy to overlook.** Keystrokes that go to the nat pipe during a native process's lifetime are NOT consumed by the native app (unless it explicitly reads them). They accumulate in conhost's input buffer and are transferred back to bash at cleanup. The transfer happens via `ReadConsoleInputA()` (raw event reads, not cooked/line-edited), so backspaces, escape sequences, and control characters are preserved as-is.
++
++**Consequence for debugging:** If keystrokes appear reordered at bash's readline after a native process exits, the problem is that some bytes went to the cyg pipe (directly to readline) while others went to the nat pipe (and were transferred back later). The bytes that went directly arrive first; the transferred bytes arrive second. This split delivery causes reordering. The fix must ensure that ALL keystrokes go through the same pipe during the native process's lifetime.
++
+ ### The Pseudo Console (pcon)
+ 
+ When `MSYS=disable_pcon` is NOT set (the default), the runtime uses Windows' `CreatePseudoConsole()` API to give native console applications a real console to talk to. The pseudo console is created on demand when a non-Cygwin process becomes the foreground process, and torn down when it exits. This is what allows programs like `cmd.exe`, `powershell.exe`, or any MinGW-built program to work correctly inside a mintty terminal, which has no native Win32 console of its own.
+@@ -217,58 +240,57 @@ The pcon lifecycle is managed across process boundaries: the slave process (runn
+ Key state fields in the `tty` structure (shared memory, in `tty.h`):
+ 
+ - **`pcon_activated`** (`bool`): True when a pseudo console is currently active.
+-- **`pcon_start`** (`bool`): True during pseudo console initialization.
++- **`pcon_start`** (`bool`): True during pseudo console initialization (CSI6n exchange).
+ - **`pcon_start_pid`** (`pid_t`): PID of the process that initiated pcon setup.
+ 
+ ### The Input State Machine
+ 
+ The field **`pty_input_state`** (type `xfer_dir`, in `tty.h:137`) tracks which pipe pair currently "owns" the input. It has two values:
+ 
+-- **`to_cyg`**: Input is flowing to the Cygwin pipe. The master's `write()` uses the `line_edit()` → `accept_input()` path, which writes to `to_slave` (cyg pipe).
++- **`to_cyg`**: Input is flowing to the Cygwin pipe. The master's `write()` uses the `line_edit()` -> `accept_input()` path, which writes to `to_slave` (cyg pipe).
+ - **`to_nat`**: Input is flowing to the native pipe. The master's `write()` writes directly to `to_slave_nat` (nat pipe), or through the pseudo console.
+ 
+-The state transitions happen via **`transfer_input()`** (pty.cc, around line 3905), which:
++The state transitions happen via **`transfer_input()`**, which:
+ 1. Reads all pending data from the "source" pipe (the one being abandoned).
+ 2. Writes that data into the "destination" pipe (the one being switched to).
+ 3. Sets `pty_input_state` to the new direction.
+ 
+-This ensures data already buffered in one pipe is not lost when switching. **However, `transfer_input()` is only correct at process-group boundaries** — specifically in `setpgid_aux()` (when the foreground changes) and `cleanup_for_non_cygwin_app()` (when a native session ends). Calling `transfer_input()` on every keystroke in `master::write()` was historically a source of bugs: during pseudo console oscillation (see below), per-keystroke transfers would steal readline's buffered data from the cyg pipe and push it to the nat pipe, causing character reordering. The correct approach is to let `setpgid_aux()` handle the transfer at the moment of the actual process-group change, not to anticipate it in the master.
++This ensures data already buffered in one pipe is not lost when switching.
++
++**When transferred input goes to the cyg pipe (to_cyg direction),** it must pass through `line_edit()` to apply POSIX line discipline. This is handled by the `input_transferred_to_cyg` event: the slave signals this event after the transfer, and the master's forward thread wakes up, reads the transferred bytes from the cyg pipe, and processes them through `line_edit()`. This ensures consistent line discipline regardless of whether input arrived via direct typing or via transfer.
+ 
+ ### Related State Fields
+ 
+-- **`switch_to_nat_pipe`** (`bool`): Set to true when a non-Cygwin process is detected in the foreground. This is a prerequisite for `to_be_read_from_nat_pipe()` returning true.
++- **`switch_to_nat_pipe`** (`bool`): Set to true when a non-Cygwin process is detected in the foreground. This is a prerequisite for `to_be_read_from_nat_pipe()` returning true. It stays true for the entire duration of the native session, including during brief transitions when `pcon_activated` may flicker.
+ - **`nat_pipe_owner_pid`** (`DWORD`): PID of the process that "owns" the nat pipe setup. Used to detect when the owner has exited (for cleanup).
+ 
+ ### The `to_be_read_from_nat_pipe()` Function
+ 
+-This function (pty.cc, around line 1288) determines whether the current foreground process is a native (non-Cygwin) app. It checks:
++This function determines whether keystroke input should go to the nat pipe. Its design intent is simple: return true whenever a native process session is active (`switch_to_nat_pipe` is set) and no Cygwin process is actively reading from the slave (the `TTY_SLAVE_READING` event does not exist).
+ 
+-1. `switch_to_nat_pipe` must be true.
+-2. A named event `TTY_SLAVE_READING` must NOT exist (its existence means a Cygwin process is actively reading from the slave, indicating a Cygwin foreground).
+-3. `nat_fg(pgid)` returns true (the foreground process group contains a native process).
++The function is synchronized with `pipe_sw_mutex` to avoid reading inconsistent state during pipe switching. If the mutex cannot be acquired and `pcon_start` is set (meaning pseudo console initialization is in progress), the function returns false so that the CSI6n response bytes go through `line_edit()` to the cyg pipe where the initialization code expects them.
+ 
+-**This function reads shared state without holding any mutex.** Its return value can therefore change between consecutive calls within the same function, which is an important consideration for callers that make multiple decisions based on the foreground state.
++**Important design principle:** This function should NOT check `nat_fg()` (whether the native process is still in the foreground process group). Such a check creates a gap between native process exit and cleanup where keystrokes fall through to `line_edit()` (cyg pipe) instead of going to the nat pipe. This gap causes keystroke reordering: bytes that go directly to the cyg pipe during the gap arrive at readline before bytes that are transferred from the nat pipe at cleanup. The correct approach is to keep routing to the nat pipe as long as `switch_to_nat_pipe` is set, regardless of the native process's foreground status. The `switch_to_nat_pipe` flag is only cleared during cleanup, after `transfer_input(to_cyg)` has moved all pending data back to the cyg pipe.
+ 
+ ### Mutexes and Synchronization
+ 
+-Two cross-process named mutexes protect different aspects of the PTY state. Understanding which mutex protects what — and the fact that they are independent — is essential for diagnosing race conditions.
++Three cross-process named mutexes protect different aspects of the PTY state:
+ 
+ - **`input_mutex`**: Protects the input data path. Held by `master::write()` while routing input to a pipe, by `transfer_input()` while moving data between pipes, and by `line_edit()` / `accept_input()`.
+-- **`pipe_sw_mutex`**: Protects pipe switching state — creation/destruction of the pseudo console, changes to `switch_to_nat_pipe`, `nat_pipe_owner_pid`. This is a DIFFERENT mutex from `input_mutex`.
+-
+-Because these are separate mutexes, it is possible for one process to modify the pipe switching state (under `pipe_sw_mutex`) while another process is in the middle of writing input (under `input_mutex`). Any code that modifies `pty_input_state` or `pcon_activated` must carefully consider whether it also needs `input_mutex` to avoid creating a window where the master's write path makes inconsistent decisions.
++- **`pipe_sw_mutex`**: Protects pipe switching state — creation/destruction of the pseudo console, changes to `switch_to_nat_pipe`, `nat_pipe_owner_pid`. Also acquired by `to_be_read_from_nat_pipe()` to read consistent state. The consistent lock ordering is: `pipe_sw_mutex` first, then `input_mutex`.
++- **`attach_mutex`**: Protects console attachment/detachment operations. Used during `transfer_input()` to prevent races when reading console input records via `ReadConsoleInputA()`, and in `get_winpid_to_hand_over()` to prevent the master process from being misidentified during temporary console attachment.
+ 
+-Additionally, because these are **cross-process** named mutexes, they are shared via the kernel between the master (terminal emulator) and slave (bash and its children) processes. Operations that look local in the source code actually have system-wide synchronization effects.
++Because these are **cross-process** named mutexes, they are shared via the kernel between the master (terminal emulator) and slave (bash and its children) processes. Operations that look local in the source code actually have system-wide synchronization effects.
+ 
+-### The `master::write()` Input Routing (pty.cc, around line 2240)
++### The `master::write()` Input Routing
+ 
+-When the terminal emulator (mintty) sends a keystroke, it calls `master::write()`. After acquiring `input_mutex`, the function decides which code path to take:
++When the terminal emulator (mintty) sends a keystroke, it calls `master::write()`. The function has three code paths:
+ 
+-1. **Code path 1 — pcon+nat fast path** (line ~2237): If `to_be_read_from_nat_pipe()` AND `pcon_activated` AND `pty_input_state == to_nat` → flush any stale readahead via `accept_input()`, then write directly to `to_slave_nat` via `WriteFile()`. This is the fast path for native apps with pcon active. The readahead flush is necessary because a prior `master::write()` call may have gone through `line_edit()` during a brief oscillation gap, leaving data in the readahead buffer that would otherwise be emitted out of order.
++1. **pcon_start handler**: Active during pseudo console initialization (CSI6n exchange). Accumulates ESC sequence bytes and routes the CSI6n response to the slave. Non-response bytes go through `line_edit()`. This path is only active during the brief initialization window.
+ 
+-2. **Code path 2 — line_edit** (line ~2275): The default/fallthrough path. Calls `line_edit()` which processes the input through terminal line discipline and then calls `accept_input()`, which writes to either the cyg or nat pipe based on the current `pty_input_state`. The `accept_input()` routing includes a `!pcon_activated` guard: it only routes to the nat pipe when pcon is NOT active, matching the documented invariant that direct nat pipe writes are for when "pseudo console is not enabled."
++2. **Fast path** (pcon+nat): Active when `to_be_read_from_nat_pipe()` AND `pcon_activated` AND `pty_input_state == to_nat`. Writes directly to `to_slave_nat` via `WriteFile()`, with signal processing and charset conversion. This is the steady-state path for native apps.
+ 
+-The conditions checked at each step involve multiple shared-memory fields (`to_be_read_from_nat_pipe()`, `pcon_activated`, `pty_input_state`). If any of these fields changes between consecutive calls to `master::write()` — or worse, between the check and the write within a single call — input can end up in the wrong pipe.
++3. **Fallthrough** (`line_edit`): All other cases. Input goes through POSIX line discipline and `accept_input()` routes to the appropriate pipe based on `pty_input_state`.
+ 
+ ### Pseudo Console Oscillation
+ 
+@@ -278,28 +300,28 @@ When a native process spawns short-lived Cygwin children (e.g. `git.exe` calling
+ 2. Cygwin child starts: `setpgid_aux()` fires, transfers data to cyg pipe, `pcon_activated=false`, `pty_input_state=to_cyg`
+ 3. Cygwin child exits (milliseconds later): native process regains foreground, pcon reactivates
+ 
+-A single command can cause dozens of such cycles per second. This "oscillation" is the root cause of the character reordering bug fixed on the `fix-jumbled-character-order` branch (see git-for-windows/git#5632). During each gap (step 2), `master::write()` must correctly route keystrokes without stealing data from readline's buffer in the cyg pipe.
++**The key design principle for handling oscillation:** keystrokes must always go to the nat pipe while `switch_to_nat_pipe` is true, regardless of `pcon_activated` or foreground status flickering. When keystrokes reach the nat pipe while the pcon is temporarily deactivated, they go through the raw pipe (not via conhost). When `transfer_input` runs at cleanup, it moves them back. This is safe because the keystrokes stay in the nat pipe in chronological order.
+ 
+-The key insight: during the oscillation gap, `switch_to_nat_pipe` remains true (the native process is still alive) even though `pcon_activated` is false. This means `to_be_read_from_nat_pipe()` returns true, which historically caused several code paths to prematurely transfer data from the cyg pipe to the nat pipe. Those transfer code paths have been removed — `setpgid_aux()` in the slave is now the sole authority for pipe transfers at process-group boundaries.
++The bugs that cause keystroke reordering are always of the form: some bytes go to the cyg pipe (via `line_edit` fallthrough) while others go to the nat pipe (via the fast path), and the two sets arrive at bash's readline in the wrong order. The fix is to prevent the split: either ALL bytes go to one pipe, or the routing decision is properly synchronized so that no bytes leak to the wrong pipe.
+ 
+ ### Key Functions for State Transitions
+ 
+-- **`setup_for_non_cygwin_app()`** (~line 4150): Called when a non-Cygwin process becomes foreground. Sets up the pseudo console and switches input to nat pipe.
+-- **`cleanup_for_non_cygwin_app()`** (~line 4184): Called when the non-Cygwin process exits. Tears down pcon, transfers input back to cyg pipe.
+-- **`reset_switch_to_nat_pipe()`** (~line 1091): Cleanup function called from various slave-side operations (e.g., `bg_check()`, `setpgid_aux()`). Detects when the nat pipe owner has exited and resets state. This function is particularly subtle because it runs in the slave process and modifies shared state that the master relies on. Note: the guard logic checks `process_alive()` first, then handles two sub-cases — when another process owns the nat pipe (return early), and when bash itself is the owner (return early if `pcon_activated` or `switch_to_nat_pipe` is still set, indicating the native session is ongoing). Without this two-level guard, `bg_check()` can tear down active pcon sessions, amplifying oscillation.
+-- **`mask_switch_to_nat_pipe()`** (~line 1249): Temporarily masks/unmasks the nat pipe switching. Used when a Cygwin process starts/stops reading from the slave.
+-- **`setpgid_aux()`** (~line 4214): Called when the foreground process group changes. May trigger pipe switching.
++- **`setup_for_non_cygwin_app()`**: Called when a non-Cygwin process is about to be spawned. Sets up the pseudo console and switches input to nat pipe. Holds `pipe_sw_mutex` during the entire setup to prevent the master from seeing inconsistent state.
++- **`cleanup_for_non_cygwin_app()`**: Called when the non-Cygwin process exits. First calls `transfer_input(to_cyg)` to move all pending input from the nat pipe (conhost's console buffer) back to the cyg pipe. Then tears down the pcon via `close_pseudoconsole()`. The transfer must happen BEFORE the pcon is closed (while the console is still accessible).
++- **`reset_switch_to_nat_pipe()`**: Cleanup function called from `bg_check()` and `setpgid_aux()`. Detects when the nat pipe owner has exited and resets state. Only performs cleanup when no other process owns the nat pipe and the owner is dead. Does NOT clean up when the owner is self (bash) or alive, to avoid tearing down active sessions.
++- **`transfer_input()`**: Moves pending data between the cyg and nat pipes. When transferring to cyg with pcon active, reads `INPUT_RECORD` events from the console via `ReadConsoleInputA()`. When transferring to cyg, signals `input_transferred_to_cyg` so the master's forward thread can apply `line_edit()` to the transferred bytes.
++- **`setpgid_aux()`**: Called when the foreground process group changes. Triggers `transfer_input` in the appropriate direction. Releases `pipe_sw_mutex` before acquiring `input_mutex` to maintain consistent lock ordering.
+ 
+ ### Debugging Tips
+ 
+ When investigating PTY-related bugs, keep these patterns in mind:
+ 
+-- **Data in two pipes**: If characters are lost, duplicated, or reordered, check whether data ended up split across the cyg and nat pipes due to a state transition during input.
+-- **Cross-process state changes**: The master and slave processes share state through the `tty` structure in shared memory. A state change in the slave (e.g., `reset_switch_to_nat_pipe()`) is immediately visible to the master, without any notification. Look for races where the master reads state, acts on it, but the state changed between the read and the action.
+-- **Mutex coverage gaps**: Check whether every modification of `pty_input_state`, `pcon_activated`, and `switch_to_nat_pipe` is protected by the appropriate mutex. The existence of two separate mutexes (`input_mutex` and `pipe_sw_mutex`) means that holding one does not protect against changes guarded by the other.
+-- **`transfer_input()` is correct only at process-group boundaries**: The proper places for `transfer_input()` are `setpgid_aux()` (foreground change) and `cleanup_for_non_cygwin_app()` (session end). Per-keystroke transfers in `master::write()` were historically a source of character reordering — they would steal readline's buffered data from the cyg pipe during pseudo console oscillation gaps. If you see a `transfer_input()` call in `master::write()`, question whether it is genuinely needed or whether `setpgid_aux()` already handles the case.
+-- **Pseudo console oscillation**: When characters are lost or reordered and the scenario involves a native process spawning Cygwin children, suspect pcon oscillation. The oscillation happens because each Cygwin child start/exit triggers a pcon teardown/setup cycle, and shared-memory flags (`pcon_activated`, `switch_to_nat_pipe`, `pty_input_state`) change rapidly without synchronization with the master's `input_mutex`. Tracing the state transitions across processes is essential for diagnosis.
+-- **Tracing**: For timing-sensitive bugs, in-process tracing with lock-free per-thread buffers (using Windows TLS and `QueryPerformanceCounter`) is effective. Avoid file I/O during reproduction — accumulate in memory and dump at process exit. See the `ui-tests/` directory for AutoHotKey-based reproducers that can drive mintty programmatically.
++- **Trace the full keystroke lifecycle**: Do not stop at "the keystroke goes to pipe X." Follow it all the way to where bash's readline receives it, including any `transfer_input` calls at cleanup. The most common bugs involve bytes being split across the two pipes and arriving at readline out of order.
++- **Check the routing decision in `to_be_read_from_nat_pipe()`**: This function is the gatekeeper for all routing decisions. If it returns the wrong value, keystrokes go to the wrong pipe. Verify that it holds `pipe_sw_mutex` while reading state, and that it does not have unnecessary checks (like `nat_fg()`) that create gaps during transitions.
++- **Study existing upstream patches before writing fixes**: Takashi Yano is the upstream PTY maintainer and understands the state machine deeply. When he proposes patches on cygwin-patches@, apply and test his full series before attempting alternative fixes. His patches form cohesive sets where individual patches depend on each other for correct behavior. Cherry-picking individual patches from his series will break invariants.
++- **Never remove `transfer_input()` calls without understanding what they transfer**: The transfers at `setpgid_aux()`, `cleanup_for_non_cygwin_app()`, and the pcon_start completion block each serve specific purposes. Removing them loses data. The correct fix for reordering bugs is to ensure keystrokes consistently go to one pipe (typically by fixing the routing decision), not to remove the transfer that reunites split data.
++- **The `pcon_start` handler is only for CSI6n**: During pcon initialization, `pcon_start=true` tells `master::write()` to enter a special handler that accumulates the CSI6n response. Non-CSI bytes in this handler go through `line_edit()` to the cyg pipe. This is correct and intentional: during the brief CSI6n exchange, the pcon is not yet ready to receive user input, so `line_edit()` buffers it for bash. The pcon_start handler is NOT a general-purpose input router and should not be modified to route bytes to the nat pipe.
++- **Tracing**: For timing-sensitive bugs, use a memory-mapped ring buffer (not per-event file I/O, which changes timings). The master process (mintty) is a MinGW program; C++ static destructors in msys-2.0.dll do NOT fire when it exits. Use `CreateFileMapping` + `MapViewOfFile` for trace buffers that persist after process termination. Use `QueryPerformanceCounter` for microsecond timestamps. Trace across both master and slave processes using separate per-PID files.
+ 
+ ## Packaging
+ 

@@ -1,0 +1,331 @@
+From 1e0ff3720728a1bd8788a836476a3e83665aa9aa Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 20 Feb 2026 12:17:50 +0100
+Subject: [PATCH 48/N] Add AGENTS.md with comprehensive project context for AI
+ agents
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This file documents the layered fork structure of this repository
+(Cygwin → MSYS2 → Git for Windows), the merging-rebase strategy that
+keeps the main branch fast-forwarding, the build system and its
+bootstrap chicken-and-egg nature (msys-2.0.dll is the POSIX emulation
+layer that its own GCC depends on), the CI pipeline, key directories
+and files, development guidelines, and external resources.
+
+The intent is to give AI coding agents enough context to work
+competently on this codebase without hallucinating about its structure
+or purpose.
+
+Assisted-by: Claude Opus 4.6
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ AGENTS.md | 298 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 298 insertions(+)
+ create mode 100644 AGENTS.md
+
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000..177fb5e
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,298 @@
++# Guidelines for AI Agents Working on This Codebase
++
++## Project Overview
++
++This repository is the **Git for Windows fork** of the **MSYS2 runtime**, which is itself a fork of the **Cygwin runtime**. The runtime provides a POSIX emulation layer on Windows, producing `msys-2.0.dll` (analogous to Cygwin's `cygwin1.dll`). It is the foundational component that allows Unix-style programs (bash, coreutils, etc.) to run on Windows within the MSYS2 and Git for Windows ecosystems.
++
++### The Layered Fork Structure
++
++There are three layers of this project, each building on the one below:
++
++1. **Cygwin** (`git://sourceware.org/git/newlib-cygwin.git`, releases at https://cygwin.com): The upstream project. Cygwin is a POSIX-compatible environment for Windows consisting of a DLL (`cygwin1.dll`) that provides substantial POSIX API functionality, plus a collection of GNU and Open Source tools. The Cygwin project releases versioned tags (e.g., `cygwin-3.6.6`) from the `cygwin/cygwin` GitHub mirror.
++
++2. **MSYS2** (`https://github.com/msys2/msys2-runtime`): The MSYS2 project rebases its own patches on top of each Cygwin release. MSYS2 maintains branches named `msys2-X.Y.Z` (e.g., `msys2-3.6.6`) where the Cygwin code is the base and MSYS2-specific patches are applied on top. These patches implement features like POSIX-to-Windows path conversion (`msys2_path_conv.cc`), the `MSYS` environment variable for controlling runtime behavior, pseudo-console support toggling, and adaptations needed for MSYS2's focus on building native Windows software (as opposed to Cygwin's focus on running Unix software on Windows as-is).
++
++3. **Git for Windows** (`https://github.com/git-for-windows/msys2-runtime`, this repository): Git for Windows maintains a "merging rebase" on top of the MSYS2 patches. The `main` branch uses a special strategy where it always fast-forwards. Each rebase to a new upstream version starts with a "fake merge" commit (message: `Start the merging-rebase to cygwin-X.Y.Z`) that merges previous `main` using the `-s ours` strategy. This ensures the branch always fast-forwards despite being rebased. Git for Windows' own patches (on top of MSYS2's patches) address issues specific to Git's usage patterns, such as Ctrl+C signal handling, SSH hang fixes, and console output correctness.
++
++### Key Relationships
++
++- **Cygwin → MSYS2**: MSYS2 rebases onto each Cygwin release. When Cygwin releases version X.Y.Z, an `msys2-X.Y.Z` branch is created with MSYS2 patches rebased on top.
++- **MSYS2 → Git for Windows**: Git for Windows performs a merging rebase that first merges in the MSYS2 patches, then rebases its own patches on top.
++- The `main` branch in this repository (git-for-windows/msys2-runtime) is the Git for Windows branch, not Cygwin's or MSYS2's.
++
++## Repository Structure
++
++### Key Directories
++
++- **`winsup/cygwin/`**: The core of the Cygwin/MSYS2 runtime. This is where `msys-2.0.dll` (the POSIX emulation DLL) is built. Most development work happens here. Key files include:
++  - `dcrt0.cc`: Runtime initialization
++  - `spawn.cc`: Process spawning
++  - `path.cc`: Path handling
++  - `fork.cc`: fork() implementation
++  - `exceptions.cc`: Signal handling
++  - `msys2_path_conv.cc` / `msys2_path_conv.h`: MSYS2-specific POSIX-to-Windows path conversion (CC0-licensed)
++  - `environ.cc`: Environment variable handling, including the `MSYS` environment variable
++  - `fhandler/`: File handler implementations for various device types
++  - `local_includes/`: Internal headers
++  - `release/`: Version history files (one per Cygwin release version)
++- **`winsup/utils/`**: Cygwin/MSYS2 utility programs (mount, cygpath, etc.)
++- **`newlib/`**: The C library (newlib) used by the runtime
++- **`ui-tests/`**: AutoHotKey-based integration tests that test the runtime in real terminal scenarios
++- **`.github/workflows/`**: CI configuration
++
++## Build System
++
++### The Chicken-and-Egg Problem
++
++The MSYS2 runtime (`msys-2.0.dll`) is itself the POSIX emulation layer that the MSYS2 toolchain (GCC, binutils, etc.) depends on. The MSYS2 environment's own GCC links against `msys-2.0.dll` to provide POSIX semantics. This means you need a working MSYS2 runtime to compile a new MSYS2 runtime — a classic bootstrap problem.
++
++In practice, this is resolved by using an existing MSYS2 installation to build the new version. The CI workflow (`.github/workflows/build.yaml`) installs MSYS2 via the `msys2/setup-msys2` action, then builds the new runtime within that environment.
++
++### Build Dependencies
++
++Building requires MSYS2 packages: `msys2-devel`, `base-devel`, `autotools`, `cocom`, `gcc`, `gettext-devel`, `libiconv-devel`, `make`, `mingw-w64-cross-crt`, `mingw-w64-cross-gcc`, `mingw-w64-cross-zlib`, `perl`, `zlib-devel`. These are all **msys** packages (they link against `msys-2.0.dll`), not native MinGW packages.
++
++### Building in the Git for Windows SDK
++
++The Git for Windows SDK provides a complete MSYS2 environment with all necessary build dependencies pre-installed. The source tree is typically located at `/usr/src/MSYS2-packages/msys2-runtime/src/msys2-runtime` inside the SDK.
++
++**Critical: PATH ordering.** The build must use the MSYS2 toolchain, not any MinGW toolchain that might be on the PATH. Before building, ensure:
++
++```bash
++export PATH=/usr/bin:/mingw64/bin:/mingw32/bin:$PATH
++```
++
++If MinGW's GCC is found first, the build will fail because MinGW tools do not link against `msys-2.0.dll` and cannot produce the runtime DLL.
++
++### Build Commands
++
++```bash
++# Generate autotools files
++(cd winsup && ./autogen.sh)
++
++# Configure (the --with-msys2-runtime-commit flag embeds the commit hash)
++./configure --disable-dependency-tracking --with-msys2-runtime-commit="$(git rev-parse HEAD)"
++
++# Build
++make -j8
++```
++
++For quick rebuilds of just the DLL during development:
++```bash
++# Rebuild only msys-2.0.dll
++make -C ../build-x86_64-pc-msys/x*/winsup/cygwin -j15 new-msys-2.0.dll
++```
++
++The build output is `new-msys-2.0.dll` in the build directory. This is a staging name to avoid overwriting the running DLL.
++
++### Testing a Locally-Built DLL
++
++You cannot replace the SDK's own `msys-2.0.dll` while running inside the SDK — the DLL is loaded by every MSYS2 process including your shell. Instead, copy the built DLL into a separate installation such as a Portable Git:
++
++```bash
++cp new-msys-2.0.dll /path/to/PortableGit/usr/bin/msys-2.0.dll
++```
++
++Then run tests using that Portable Git's mintty/bash. Back up the original DLL first.
++
++The `build-and-copy.sh` helper script in the repository root can reconfigure, rebuild, and copy `msys-2.0.dll` to a target location.
++
++### Internal API Constraints
++
++Code inside `msys-2.0.dll` cannot use the full C runtime or C++ standard library freely. Key limitations:
++
++- **`__small_sprintf`** is used instead of `sprintf`. It does NOT support `%lld` (64-bit integers) or floating-point format specifiers. For 64-bit values, split into high/low 32-bit halves and print as two `%u` values.
++- **Memory allocation** in low-level code (e.g., DLL initialization, atexit handlers) should use `HeapAlloc(GetProcessHeap(), ...)` to avoid circular dependencies with the Cygwin malloc.
++
++### CI Pipeline
++
++The CI (`.github/workflows/build.yaml`) does the following:
++1. **Build**: Compiles the runtime on `windows-latest` using MSYS2
++2. **Minimal SDK artifact**: Creates a minimal Git for Windows SDK with the just-built runtime, used for testing Git itself
++3. **Test minimal SDK**: Runs Git's test suite against the new runtime
++4. **UI tests**: AutoHotKey-based integration tests for terminal behavior (Ctrl+C interrupts, SSH operations, etc.)
++5. **MSYS2 tests**: Runs the MSYS2 project's own test suite across multiple environments and compilers
++
++## Git Branch and Rebase Workflow
++
++### The Merging Rebase Strategy
++
++Git for Windows uses a "merging rebase" to maintain a fast-forwarding `main` branch. The key insight is a "fake merge" commit that:
++
++1. Starts from the new upstream commit (Cygwin tag)
++2. Merges in the previous `main` using `-s ours` (takes NO changes from previous main, only the tree from upstream)
++3. This makes `main` a parent of the new commit, so the result is a fast-forward from previous `main`
++4. Patches are then rebased on top of this fake merge
++
++The commit message follows a strict format: `Start the merging-rebase to cygwin-X.Y.Z`. This is machine-parseable — `git rev-parse 'main^{/^Start.the.merging-rebase}'` finds the most recent such commit.
++
++### History of Merging Rebases
++
++The repository has been continuously rebased through Cygwin versions from 3.3.x through the current 3.6.6. Each rebase is visible as a `Start the merging-rebase to cygwin-X.Y.Z` commit on `main`.
++
++### Key Branches
++
++- `main`: Git for Windows' branch (fast-forwarding, contains merging-rebase commits)
++- `cygwin-X_Y-branch` (e.g., `cygwin-3_6-branch`): Tracking branches for upstream Cygwin
++- `cygwin/main`: Upstream Cygwin's main branch
++- Various feature branches for specific fixes (e.g., `fix-ctrl+c-again`, `fix-ssh-hangs-reloaded`)
++
++### Key Remotes
++
++- `cygwin`: The upstream Cygwin repository (`git://sourceware.org/git/newlib-cygwin.git`)
++- `msys2`: The MSYS2 fork (`https://github.com/msys2/msys2-runtime`)
++- `git-for-windows`: This repository (`https://github.com/git-for-windows/msys2-runtime`)
++- `dscho`: Johannes Schindelin's fork (primary maintainer)
++
++## Development Guidelines
++
++### Language and Style
++
++The runtime is written in **C++** (with some C). The code uses Cygwin's existing coding conventions. When modifying files under `winsup/cygwin/`:
++- Follow the existing indentation and brace style of each file
++- Cygwin code uses 8-space tabs in many files
++- MSYS2-specific additions (like `msys2_path_conv.cc`) may use different conventions
++
++### Making Changes
++
++Most changes for Git for Windows purposes are in `winsup/cygwin/`. Common areas of modification:
++- Signal handling (`exceptions.cc`, `sigproc.cc`)
++- Process spawning (`spawn.cc`)
++- PTY/console handling (`fhandler/` directory, `termios.cc`)
++- Path conversion (`msys2_path_conv.cc`, `path.cc`)
++- Environment handling (`environ.cc`)
++
++### Testing
++
++- The CI builds the runtime and runs Git's entire test suite against it
++- UI tests in `ui-tests/` test real terminal scenarios using AutoHotKey
++- MSYS2's own test suite is run across multiple compiler/environment combinations
++- For local testing, build the DLL and copy it to replace `msys-2.0.dll` in an MSYS2 installation
++
++### Commit Discipline
++
++- One logical change per commit
++- Commit messages should explain context, intent, and justification in prose (not bullet points)
++- For the rebase workflow, commit messages follow specific patterns (e.g., `Start the merging-rebase to ...`) that tooling depends on — do not alter these patterns
++
++## PTY Architecture — Pipes, State Machine, and Input Routing
++
++This section documents the internal architecture of the pseudo-terminal (PTY) implementation in `winsup/cygwin/fhandler/pty.cc`. Understanding this is essential for debugging any issue involving terminal input/output, keystroke handling, signal delivery, and process foreground/background transitions.
++
++### Background: Why This Matters
++
++The pseudo console support in the Cygwin runtime is one of the most intricate subsystems in this codebase. It bridges two fundamentally different models of terminal I/O — POSIX and Win32 console — across multiple processes that share state through shared memory. The implementation is ambitious and evolving; the complexity of the interactions between pipe switching, pseudo console lifecycle, cross-process mutexes, and foreground process detection means that changes in one area can have subtle, hard-to-diagnose effects elsewhere. Historically, bug fixes in this area have occasionally introduced new regressions, which is simply a reflection of how difficult the problem space is. Any AI agent working on PTY-related issues should take the time to understand the full picture before proposing changes, and should be especially careful about mutex acquisition order, state transitions that span process boundaries, and the distinction between the two pipe pairs described below.
++
++### The Two Pipe Pairs
++
++Each PTY has **two independent pipe pairs** for input, serving different consumers:
++
++1. **Cygwin (cyg) pipe**: `to_slave` / `from_master`
++   - Used when a **Cygwin/MSYS2 process** (e.g., bash) is in the foreground.
++   - Input goes through `line_edit()` (in `termios.cc`) which handles line discipline (echo, canonical mode, special characters) before being written via `accept_input()`.
++   - The slave reads from `from_master` (aliased as `get_handle()` on the slave side).
++
++2. **Native (nat) pipe**: `to_slave_nat` / `from_master_nat`
++   - Used when a **non-Cygwin (native Windows) process** (e.g., `powershell.exe`, `cmd.exe`, a MinGW program) is in the foreground.
++   - When the pseudo console (pcon) is active, `CreatePseudoConsole()` wraps this pipe pair. The Windows `conhost.exe` process reads from `from_master_nat` and provides console input semantics to the native app.
++   - The master writes directly to `to_slave_nat` via `WriteFile()`, bypassing `line_edit()`.
++
++For **output**, there is a corresponding pair (`to_master` / `to_master_nat`) plus a forwarding thread (`master_fwd_thread`) that copies output from the nat pipe's slave side (`from_slave_nat`) to the cyg pipe's master side (`to_master`), so the terminal emulator (mintty) always reads from one place.
++
++### The Pseudo Console (pcon)
++
++When `MSYS=disable_pcon` is NOT set (the default), the runtime uses Windows' `CreatePseudoConsole()` API to give native console applications a real console to talk to. The pseudo console is created on demand when a non-Cygwin process becomes the foreground process, and torn down when it exits. This is what allows programs like `cmd.exe`, `powershell.exe`, or any MinGW-built program to work correctly inside a mintty terminal, which has no native Win32 console of its own.
++
++The pcon lifecycle is managed across process boundaries: the slave process (running the non-Cygwin app) and the master process (the terminal emulator) both participate. This cross-process coordination is the source of much of the complexity.
++
++Key state fields in the `tty` structure (shared memory, in `tty.h`):
++
++- **`pcon_activated`** (`bool`): True when a pseudo console is currently active.
++- **`pcon_start`** (`bool`): True during pseudo console initialization.
++- **`pcon_start_pid`** (`pid_t`): PID of the process that initiated pcon setup.
++
++### The Input State Machine
++
++The field **`pty_input_state`** (type `xfer_dir`, in `tty.h:137`) tracks which pipe pair currently "owns" the input. It has two values:
++
++- **`to_cyg`**: Input is flowing to the Cygwin pipe. The master's `write()` uses the `line_edit()` → `accept_input()` path, which writes to `to_slave` (cyg pipe).
++- **`to_nat`**: Input is flowing to the native pipe. The master's `write()` writes directly to `to_slave_nat` (nat pipe), or through the pseudo console.
++
++The state transitions happen via **`transfer_input()`** (pty.cc, around line 3905), which:
++1. Reads all pending data from the "source" pipe (the one being abandoned).
++2. Writes that data into the "destination" pipe (the one being switched to).
++3. Sets `pty_input_state` to the new direction.
++
++This ensures data already buffered in one pipe is not lost when switching. **Any code that changes `pty_input_state` without calling `transfer_input()` risks losing or reordering data.** This invariant is critical and has been the root cause of past bugs.
++
++### Related State Fields
++
++- **`switch_to_nat_pipe`** (`bool`): Set to true when a non-Cygwin process is detected in the foreground. This is a prerequisite for `to_be_read_from_nat_pipe()` returning true.
++- **`nat_pipe_owner_pid`** (`DWORD`): PID of the process that "owns" the nat pipe setup. Used to detect when the owner has exited (for cleanup).
++
++### The `to_be_read_from_nat_pipe()` Function
++
++This function (pty.cc, around line 1288) determines whether the current foreground process is a native (non-Cygwin) app. It checks:
++
++1. `switch_to_nat_pipe` must be true.
++2. A named event `TTY_SLAVE_READING` must NOT exist (its existence means a Cygwin process is actively reading from the slave, indicating a Cygwin foreground).
++3. `nat_fg(pgid)` returns true (the foreground process group contains a native process).
++
++**This function reads shared state without holding any mutex.** Its return value can therefore change between consecutive calls within the same function, which is an important consideration for callers that make multiple decisions based on the foreground state.
++
++### Mutexes and Synchronization
++
++Two cross-process named mutexes protect different aspects of the PTY state. Understanding which mutex protects what — and the fact that they are independent — is essential for diagnosing race conditions.
++
++- **`input_mutex`**: Protects the input data path. Held by `master::write()` while routing input to a pipe, by `transfer_input()` while moving data between pipes, and by `line_edit()` / `accept_input()`.
++- **`pipe_sw_mutex`**: Protects pipe switching state — creation/destruction of the pseudo console, changes to `switch_to_nat_pipe`, `nat_pipe_owner_pid`. This is a DIFFERENT mutex from `input_mutex`.
++
++Because these are separate mutexes, it is possible for one process to modify the pipe switching state (under `pipe_sw_mutex`) while another process is in the middle of writing input (under `input_mutex`). Any code that modifies `pty_input_state` or `pcon_activated` must carefully consider whether it also needs `input_mutex` to avoid creating a window where the master's write path makes inconsistent decisions.
++
++Additionally, because these are **cross-process** named mutexes, they are shared via the kernel between the master (terminal emulator) and slave (bash and its children) processes. Operations that look local in the source code actually have system-wide synchronization effects.
++
++### The `master::write()` Input Routing (pty.cc, around line 2240)
++
++When the terminal emulator (mintty) sends a keystroke, it calls `master::write()`. After acquiring `input_mutex`, the function decides which path to take:
++
++1. **Path 1 — pcon+nat** (line ~2245): If `to_be_read_from_nat_pipe()` AND `pcon_activated` AND `pty_input_state == to_nat` → write directly to `to_slave_nat`. This is the fast path for native apps with pcon.
++
++2. **Path 2 — non-pcon transfer** (line ~2288): If `to_be_read_from_nat_pipe()` AND NOT `pcon_activated` AND `pty_input_state == to_cyg` → call `transfer_input(to_nat)` to move cyg pipe data to nat pipe, then fall through to line_edit.
++
++3. **Path 3 — line_edit** (line ~2300): The default/fallthrough path. Calls `line_edit()` which processes the input through terminal line discipline and then calls `accept_input()`, which writes to either the cyg or nat pipe based on the current `pty_input_state`.
++
++The conditions checked at each step involve multiple shared-memory fields (`to_be_read_from_nat_pipe()`, `pcon_activated`, `pty_input_state`). If any of these fields changes between consecutive calls to `master::write()` — or worse, between the check and the write within a single call — input can end up in the wrong pipe.
++
++### Key Functions for State Transitions
++
++- **`setup_for_non_cygwin_app()`** (~line 4150): Called when a non-Cygwin process becomes foreground. Sets up the pseudo console and switches input to nat pipe.
++- **`cleanup_for_non_cygwin_app()`** (~line 4184): Called when the non-Cygwin process exits. Tears down pcon, transfers input back to cyg pipe.
++- **`reset_switch_to_nat_pipe()`** (~line 1091): Cleanup function called from various slave-side operations (e.g., `bg_check()`, `setpgid_aux()`). Detects when the nat pipe owner has exited and resets state. This function is particularly subtle because it runs in the slave process and modifies shared state that the master relies on.
++- **`mask_switch_to_nat_pipe()`** (~line 1249): Temporarily masks/unmasks the nat pipe switching. Used when a Cygwin process starts/stops reading from the slave.
++- **`setpgid_aux()`** (~line 4214): Called when the foreground process group changes. May trigger pipe switching.
++
++### Debugging Tips
++
++When investigating PTY-related bugs, keep these patterns in mind:
++
++- **Data in two pipes**: If characters are lost, duplicated, or reordered, check whether data ended up split across the cyg and nat pipes due to a state transition during input.
++- **Cross-process state changes**: The master and slave processes share state through the `tty` structure in shared memory. A state change in the slave (e.g., `reset_switch_to_nat_pipe()`) is immediately visible to the master, without any notification. Look for races where the master reads state, acts on it, but the state changed between the read and the action.
++- **Mutex coverage gaps**: Check whether every modification of `pty_input_state`, `pcon_activated`, and `switch_to_nat_pipe` is protected by the appropriate mutex. The existence of two separate mutexes (`input_mutex` and `pipe_sw_mutex`) means that holding one does not protect against changes guarded by the other.
++- **`transfer_input()` must accompany state changes**: Whenever `pty_input_state` is changed, any data buffered in the old pipe must be transferred to the new one. Forgetting this step causes data loss or reordering.
++- **Tracing**: For timing-sensitive bugs, in-process tracing with lock-free per-thread buffers (using Windows TLS and `QueryPerformanceCounter`) is effective. Avoid file I/O during reproduction — accumulate in memory and dump at process exit. See the `ui-tests/` directory for AutoHotKey-based reproducers that can drive mintty programmatically.
++
++## Packaging
++
++The MSYS2 runtime is packaged as an **msys** package (`msys2-runtime`) using `makepkg` with a `PKGBUILD` recipe in the `msys2/MSYS2-packages` repository. The package definition lives at `msys2-runtime/PKGBUILD` in that repository.
++
++## External Resources
++
++- **Cygwin project**: https://cygwin.com — upstream source, FAQ, user's guide
++- **Cygwin source**: https://github.com/cygwin/cygwin (mirror of `sourceware.org/git/newlib-cygwin.git`)
++- **Cygwin announcements**: https://inbox.sourceware.org/cygwin-announce — release announcements
++- **MSYS2 project**: https://www.msys2.org — documentation, package management
++- **MSYS2 runtime source**: https://github.com/msys2/msys2-runtime
++- **MSYS2 packages**: https://github.com/msys2/MSYS2-packages — package recipes including `msys2-runtime`
++- **Git for Windows**: https://gitforwindows.org
++- **Git for Windows runtime**: https://github.com/git-for-windows/msys2-runtime (this repository)
++- **MSYS2 environments**: https://www.msys2.org/docs/environments/ — explains MSYS vs UCRT64 vs CLANG64 etc.

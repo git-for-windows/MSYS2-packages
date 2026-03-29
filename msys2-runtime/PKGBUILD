@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.7
-pkgrel=3
+pkgrel=4
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -74,9 +74,23 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0044-Use-MB_CUR_MAX-6-by-default.patch
         0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch
         0046-Change-the-default-base-address-for-x86_64.patch
-        0047-fixup-Use-MB_CUR_MAX-6-by-default.patch)
+        0047-fixup-Use-MB_CUR_MAX-6-by-default.patch
+        0048-Add-AGENTS.md-with-comprehensive-project-context-for.patch
+        0049-Cygwin-pty-Fix-nat-pipe-hand-over-when-pcon-is-disab.patch
+        0050-Cygwin-console-Release-pipe_sw_mutex-in-pcon_hand_ov.patch
+        0051-Cygwin-pty-Fix-input-transfer-when-multiple-non-cygw.patch
+        0052-Cygwin-console-Fix-master-thread.patch
+        0053-Cygwin-pty-Add-workaround-for-handling-of-backspace-.patch
+        0054-Cygwin-console-Use-input_mutex-in-the-parent-PTY-in-.patch
+        0055-Cygwin-pty-Apply-line_edit-for-transferred-input-to-.patch
+        0056-Cygwin-pty-Guard-get_winpid_to_hand_over-with-attach.patch
+        0057-Cygwin-pty-Guard-to_be_read_from_nat_pipe-by-pipe_sw.patch
+        0058-Cygwin-pty-Drop-nat_fg-check-from-to_be_read_from_na.patch
+        0059-fixup-Add-AGENTS.md-with-comprehensive-project-conte.patch
+        0060-fixup-Add-AGENTS.md-with-comprehensive-project-conte.patch
+        0061-fixup-Add-AGENTS.md-with-comprehensive-project-conte.patch)
 sha256sums=('4ecc8ac443ed3f0568e9b2f95aafa9f412669466bfb0dd5cfbb194b572538916'
-            'c31268394bbe6094e590b5c019aaf2e25f5d5fa4c2cb0bc37a01218af9c4bd14'
+            '6af07981e82b3f1910a1573643e62cac3b7402705a19fbf996af8c75ca9af4a7'
             'fd5fca07f5febedd4be73af01613847568aec1e6dd1f0aa39658f9c946ae2812'
             'c5d502a01a7206ef26572674cc081e71c11e4796b1ffae7ee06c8afd546abf53'
             '432af98a8df514b3dbf2c6d6a82f19b561b40b109466f8eecc2c74ad5cc03b86'
@@ -123,7 +137,21 @@ sha256sums=('4ecc8ac443ed3f0568e9b2f95aafa9f412669466bfb0dd5cfbb194b572538916'
             '4898546fae614b07aae22beba2246a9bcb909f9486d3423321172920d165db2d'
             '4d6e3eb36d418eb967d63087a48420d48c911c156631989465351fc0f345f289'
             'c89414545dacfedc30bb48c54ff1f6a89b32a8cfceb6342ef1050bfb12fff20e'
-            'bcf9839f2fda676542c85c08d6f612b4c854b2a273f96473d8d49b371014edb8')
+            'bcf9839f2fda676542c85c08d6f612b4c854b2a273f96473d8d49b371014edb8'
+            '266e9602353e81aa95d829de0a1a4fc0f3ad3ec5d1a110f2f32c94d345b47a34'
+            'f58beb7ece28eb3c054e451fc82f38ae8105caf779539927b964f398a3728daa'
+            '90f222e70003f62f5c49e24ffa881dda74e00e4becac2e71d20fbb56ef461c4f'
+            '2daa6a88915f124f66feb8bd2dfe80ed5f10d00fa16e76d015b0d89a5bd4313b'
+            '2fd54ad7ce72786dceea533fc208cb14dbe36b00c1709edfc34993d3a15038c9'
+            'd5de4f78e00702c2d65ccc80f0fbd10d5da597ccb6e5ac78fd0a69b26ddb9857'
+            'df4a8c5b4ab59ec902902a46b069337f4d67d3b6f7540a98ff89c881f4d6fee3'
+            '8d51d9c94aa199e000da1faaa8658e3f7d525dad92d6704a43b392140dd9ce70'
+            '51a8493b83462e2fa1e0c605a6e0cd5c435b38eeec60cacdcc32a87de1a3ea33'
+            '328a0b94e0f567bbb1fd3ba7c030652dde8ea9a59fd4e37a6023d29623815d66'
+            '162c510934b42c1a5935d2a20ffcf65ab009f4d59330c8d02cb6a7376e59e788'
+            'cccaedb75f95603a8b77885ae3535827eac14657e32b5dc2521b14db28ea23c2'
+            '63d6a614115d40fa38a89683e2067f82e2e0c0fdafab8af4d0e83517d889e321'
+            '7e6a65f17a61b434b01cf726fb709c0e8e9b6a3873cdc5ddfe8225bcac8f65c3')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -225,7 +253,21 @@ prepare() {
   0044-Use-MB_CUR_MAX-6-by-default.patch \
   0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
   0046-Change-the-default-base-address-for-x86_64.patch \
-  0047-fixup-Use-MB_CUR_MAX-6-by-default.patch
+  0047-fixup-Use-MB_CUR_MAX-6-by-default.patch \
+  0048-Add-AGENTS.md-with-comprehensive-project-context-for.patch \
+  0049-Cygwin-pty-Fix-nat-pipe-hand-over-when-pcon-is-disab.patch \
+  0050-Cygwin-console-Release-pipe_sw_mutex-in-pcon_hand_ov.patch \
+  0051-Cygwin-pty-Fix-input-transfer-when-multiple-non-cygw.patch \
+  0052-Cygwin-console-Fix-master-thread.patch \
+  0053-Cygwin-pty-Add-workaround-for-handling-of-backspace-.patch \
+  0054-Cygwin-console-Use-input_mutex-in-the-parent-PTY-in-.patch \
+  0055-Cygwin-pty-Apply-line_edit-for-transferred-input-to-.patch \
+  0056-Cygwin-pty-Guard-get_winpid_to_hand_over-with-attach.patch \
+  0057-Cygwin-pty-Guard-to_be_read_from_nat_pipe-by-pipe_sw.patch \
+  0058-Cygwin-pty-Drop-nat_fg-check-from-to_be_read_from_na.patch \
+  0059-fixup-Add-AGENTS.md-with-comprehensive-project-conte.patch \
+  0060-fixup-Add-AGENTS.md-with-comprehensive-project-conte.patch \
+  0061-fixup-Add-AGENTS.md-with-comprehensive-project-conte.patch
 }
 
 build() {

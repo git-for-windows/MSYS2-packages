@@ -1,0 +1,50 @@
+From a0f8f2baa5454daaa3d751ab07bf0fee205c2b13 Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Tue, 24 Mar 2026 11:25:40 +0900
+Subject: [PATCH 50/N] Cygwin: console: Release pipe_sw_mutex in
+ pcon_hand_over_proc()
+
+Currently, pipe_sw_mutex is held in the process which is running
+in console inherited from pseudo console until the process ends.
+Due to this behaviour, the process may cause deadlock when it
+attempts to acquire input_mutex in set_input_mode() called via
+close_ctty(). This deadlock occurs because the pty master
+acquire input_mutex first and acquire pipe_sw_mutex next while
+the process exiting acquire pipe_sw_mutex first.
+
+To avoid this deadlock, this patch releases pipe_sw_mutex in
+pcon_hand_over_proc(). In addition, pointless pipe_sw_mutex
+acquire/release is drppped in pcon_hand_over_proc().
+
+Fixes: 04f386e9af99 ("Cygwin: console: Inherit pcon hand over from parent pty")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Corinna Vinschen <corinna@vinschen.de>
+Cherry-picked-from: 9ef8e3ad3b (Cygwin: console: Release pipe_sw_mutex in pcon_hand_over_proc(), 2026-03-24)
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/console.cc | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/winsup/cygwin/fhandler/console.cc b/winsup/cygwin/fhandler/console.cc
+index 831df4f..9e11611 100644
+--- a/winsup/cygwin/fhandler/console.cc
++++ b/winsup/cygwin/fhandler/console.cc
+@@ -1946,8 +1946,6 @@ fhandler_console::pcon_hand_over_proc (void)
+   char buf[MAX_PATH];
+   shared_name (buf, PIPE_SW_MUTEX, parent_pty);
+   HANDLE mtx = OpenMutex (MAXIMUM_ALLOWED, FALSE, buf);
+-  WaitForSingleObject (mtx, INFINITE);
+-  ReleaseMutex (mtx);
+   DWORD res = WaitForSingleObject (mtx, INFINITE);
+   if (res == WAIT_OBJECT_0 || res == WAIT_ABANDONED)
+     {
+@@ -1958,8 +1956,7 @@ fhandler_console::pcon_hand_over_proc (void)
+     }
+   else
+     system_printf("Acquiring pcon_ho_mutex failed.");
+-  /* Do not release the mutex.
+-     Hold onto the mutex until this process completes. */
++  ReleaseMutex (mtx);
+ }
+ 
+ bool

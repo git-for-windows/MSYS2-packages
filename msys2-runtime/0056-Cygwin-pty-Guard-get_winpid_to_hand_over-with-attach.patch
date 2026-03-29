@@ -1,0 +1,99 @@
+From 9e78b35e7566edad51c22de8688af3eaa23cb31b Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Sat, 28 Mar 2026 19:55:49 +0900
+Subject: [PATCH 56/N] Cygwin: pty: Guard get_winpid_to_hand_over() with
+ attach_mutex
+
+The master process (e.g. mintty) temporarily attaches to the pseudo
+console's conhost in `transfer_input()` so it can read
+INPUT_RECORDs via `ReadConsoleInputA()`. During that brief window,
+`get_console_process_id()` inside `get_winpid_to_hand_over()` calls
+`GetConsoleProcessList()`, which sees the master among the console's
+attached processes and may select it as the handover target. That is
+wrong because the master will detach immediately after the read.
+
+Until now, `attach_mutex` was a process-local unnamed mutex, so
+the slave's `get_winpid_to_hand_over()` could not serialize with
+the master's temporary attachment. Make `attach_mutex` a
+cross-process named mutex (`ATTACH_MUTEX`) shared within the PTY,
+and acquire it around the `get_console_process_id()` calls in
+`get_winpid_to_hand_over()`. This ensures the console process list
+enumeration never observes the master while it is temporarily
+attached.
+
+Fixes: 1e6c51d74136 ("Cygwin: pty: Reorganize the code path of setting up and closing pcon.")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/pty.cc      | 16 ++++++++++++++--
+ winsup/cygwin/local_includes/tty.h |  1 +
+ 2 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index 58fd996..d6817cb 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -773,6 +773,12 @@ fhandler_pty_slave::open (int flags, mode_t)
+       errmsg = "open pipe switch mutex failed, %E";
+       goto err;
+     }
++  if (!(attach_mutex
++	= get_ttyp ()->open_mutex (ATTACH_MUTEX, MAXIMUM_ALLOWED)))
++    {
++      errmsg = "open attach mutex failed, %E";
++      goto err;
++    }
+   shared_name (buf, INPUT_AVAILABLE_EVENT, get_minor ());
+   if (!(input_available_event = OpenEvent (MAXIMUM_ALLOWED, TRUE, buf)))
+     {
+@@ -2493,6 +2499,9 @@ void
+ fhandler_pty_slave::fixup_after_fork (HANDLE parent)
+ {
+   create_invisible_console ();
++  /* attach_mutex is initialized not only in the fork() case, but also in
++     the exec() case, since fixup_after_exec() calls fixup_after_fork(). */
++  attach_mutex = get_ttyp ()->open_mutex (ATTACH_MUTEX, MAXIMUM_ALLOWED);
+ 
+   // fork_fixup (parent, inuse, "inuse");
+   // fhandler_pty_common::fixup_after_fork (parent);
+@@ -3121,8 +3130,9 @@ fhandler_pty_master::setup ()
+   if (!(pipe_sw_mutex = CreateMutex (&sa, FALSE, buf)))
+     goto err;
+ 
+-  if (!attach_mutex)
+-    attach_mutex = CreateMutex (&sec_none_nih, FALSE, NULL);
++  errstr = shared_name (buf, ATTACH_MUTEX, unit);
++  if (!(attach_mutex = CreateMutex (&sa, FALSE, buf)))
++    goto err;
+ 
+   /* Create master control pipe which allows the master to duplicate
+      the pty pipe handles to processes which deserve it. */
+@@ -3676,6 +3686,7 @@ fhandler_pty_slave::get_winpid_to_hand_over (tty *ttyp,
+       DWORD current_pid = myself->exec_dwProcessId ?: myself->dwProcessId;
+       if (ttyp->nat_pipe_owner_pid == GetCurrentProcessId ())
+ 	current_pid = GetCurrentProcessId ();
++      acquire_attach_mutex (mutex_timeout);
+       switch_to = get_console_process_id (current_pid,
+ 					  false, true, true, true);
+       if (!switch_to)
+@@ -3684,6 +3695,7 @@ fhandler_pty_slave::get_winpid_to_hand_over (tty *ttyp,
+       if (!switch_to && ttyp->pcon_activated)
+ 	switch_to = get_console_process_id (current_pid,
+ 					    false, false, false, false);
++      release_attach_mutex ();
+     }
+   return switch_to;
+ }
+diff --git a/winsup/cygwin/local_includes/tty.h b/winsup/cygwin/local_includes/tty.h
+index 7d80ab4..6e70a74 100644
+--- a/winsup/cygwin/local_includes/tty.h
++++ b/winsup/cygwin/local_includes/tty.h
+@@ -22,6 +22,7 @@ details. */
+ #define OUTPUT_MUTEX		"cygtty.output.mutex"
+ #define INPUT_MUTEX		"cygtty.input.mutex"
+ #define PIPE_SW_MUTEX		"cygtty.pipe_sw.mutex"
++#define ATTACH_MUTEX		"cygtty.attach.mutex"
+ #define TTY_SLAVE_ALIVE		"cygtty.slave_alive"
+ #define TTY_SLAVE_READING	"cygtty.slave_reading"
+ 

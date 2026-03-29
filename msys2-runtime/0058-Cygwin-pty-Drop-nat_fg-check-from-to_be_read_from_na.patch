@@ -1,0 +1,89 @@
+From 76f644d90e44d4d41a69ab4ca38e98c64a9b67ec Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Sat, 28 Mar 2026 19:55:51 +0900
+Subject: [PATCH 58/N] Cygwin: pty: Drop nat_fg() check from
+ to_be_read_from_nat_pipe()
+
+While a non-cygwin app has exited but the stub process has not yet
+terminated, `nat_fg()` returns false because no non-cygwin app is
+running. In this window, pty input goes to the cyg pipe. Due to
+this, the keystroke order is swapped unexpectedly:
+
+1) start non-cygwin app
+2) press 'a' ('a' goes to nat pipe)
+3) non-cygwin app exits
+4) press 'b' ('b' goes to cyg pipe)
+5) the stub process for non-cygwin app transfers input in nat pipe
+   to cyg pipe ('a' goes to cyg pipe)
+6) the result in the cyg pipe is "ba"
+
+Fix this by dropping the `nat_fg()` check from
+`to_be_read_from_nat_pipe()`. The function now returns true when
+`!pcon_start && switch_to_nat_pipe && !masked`. Each component has
+a specific purpose:
+
+- `!pcon_start`: keystrokes go through the CSI6n response handler
+  during pseudo console initialization rather than the fast path.
+- `switch_to_nat_pipe`: this session-level flag stays true from
+  `setup_for_non_cygwin_app()` through `cleanup_for_non_cygwin_app()`,
+  spanning the entire native process lifetime including the post-exit
+  cleanup window.
+- `!masked` (`TTY_SLAVE_READING` event does not exist): keystrokes
+  go to the Cygwin pipe when a Cygwin process is actively reading
+  from the slave, since that process expects POSIX-processed input.
+
+Removing `nat_fg()` is safe because conhost's input buffer
+accumulates keystrokes as INPUT_RECORDs during the post-exit
+window, and `transfer_input(to_cyg)` in `cleanup_for_non_cygwin_app()`
+reads them back via `ReadConsoleInputA()` and writes them to the
+cyg pipe. Those transferred bytes then go through `line_edit()` in
+the master's forward thread (via `input_transferred_to_cyg` from an
+earlier patch in this series), ensuring proper POSIX line discipline
+processing.
+
+Additionally, add a `nat_fg()` check to the disable_pcon transfer
+path in `master::write()`. That transfer moves cyg pipe data to
+the nat pipe when a Cygwin child exits and a native process
+regains the foreground with pcon disabled. Without pcon, there is
+no conhost buffer to accumulate keystrokes (the nat pipe is a raw
+pipe), so keystrokes must only go there when a native process is
+genuinely in the foreground and ready to read them. The `nat_fg()`
+guard prevents the transfer from stealing readline's data during
+the post-exit window.
+
+Fixes: f20641789427 ("Cygwin: pty: Reduce unecessary input transfer.")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/pty.cc | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index 4a628ea..07904d9 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -1308,14 +1308,8 @@ fhandler_pty_common::to_be_read_from_nat_pipe (void)
+       goto out;
+   }
+ 
+-  if (!pinfo (get_ttyp ()->getpgid ()))
+-    /* GDB may set invalid process group for non-cygwin process. */
+-    {
+-      ret = true;
+-      goto out;
+-    }
++  ret = true; /* !pcon_start && switch_to_nat_pipe && !masked */
+ 
+-  ret = get_ttyp ()->nat_fg (get_ttyp ()->getpgid ());
+ out:
+   ReleaseMutex (pipe_sw_mutex);
+   return ret;
+@@ -2354,6 +2348,7 @@ fhandler_pty_master::write (const void *ptr, size_t len)
+   /* This input transfer is needed when cygwin-app which is started from
+      non-cygwin app is terminated if pseudo console is disabled. */
+   if (to_be_read_from_nat_pipe () && !get_ttyp ()->pcon_activated
++      && get_ttyp ()->nat_fg (get_ttyp ()->getpgid ())
+       && get_ttyp ()->pty_input_state == tty::to_cyg)
+     {
+       acquire_attach_mutex (mutex_timeout);
