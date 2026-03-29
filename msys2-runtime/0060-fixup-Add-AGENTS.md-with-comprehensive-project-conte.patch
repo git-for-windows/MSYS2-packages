@@ -1,0 +1,36 @@
+From 6c1ab7b075b1e62a44344b546916b9127ee8b125 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 26 Feb 2026 18:56:32 +0100
+Subject: [PATCH 60/N] fixup! Add AGENTS.md with comprehensive project context
+ for AI agents
+
+Document the Cygwin commit message conventions (subject prefix, Fixes
+and Addresses trailers, trailer ordering) as observed in upstream
+commits by Corinna Vinschen and Takashi Yano.
+
+Assisted-by: Claude Opus 4.6
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ AGENTS.md | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 547cf8e..67b3945 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -175,6 +175,15 @@ Most changes for Git for Windows purposes are in `winsup/cygwin/`. Common areas
+ - Commit messages should explain context, intent, and justification in prose (not bullet points)
+ - For the rebase workflow, commit messages follow specific patterns (e.g., `Start the merging-rebase to ...`) that tooling depends on — do not alter these patterns
+ 
++### Cygwin Commit Message Format
++
++Commits that modify code under `winsup/cygwin/` should follow the Cygwin project's commit message conventions, as established by the upstream maintainers (Corinna Vinschen, Takashi Yano, et al.):
++
++- **Subject prefix**: `Cygwin: <area>: <description>`, where `<area>` is the subsystem (e.g. `pty`, `flock`, `termios`, `uinfo`, `path`, `spawn`). Example: `Cygwin: pty: Fix jumbled keystrokes by removing the per-keystroke pipe transfer`. Both upper-case and lower-case after the prefix are used upstream; there is no strict rule.
++- **`Fixes:` trailer**: When a commit fixes a bug introduced by a specific earlier commit, reference it with `Fixes: <12-char-hash> ("<original subject>")`. Example: `Fixes: acc44e09d1d0 ("Cygwin: pty: Add missing input transfer when switch_to_pcon_in state.")`
++- **`Addresses:` trailer**: Reference the user-visible bug report URL. Example: `Addresses: https://github.com/git-for-windows/git/issues/5632`
++- **Trailer ordering**: `Addresses:`, then `Fixes:`, then `Assisted-by:` / `Reviewed-by:` / `Reported-by:`, then `Signed-off-by:` last — following the pattern seen in upstream Cygwin commits.
++
+ ## PTY Architecture — Pipes, State Machine, and Input Routing
+ 
+ This section documents the internal architecture of the pseudo-terminal (PTY) implementation in `winsup/cygwin/fhandler/pty.cc`. Understanding this is essential for debugging any issue involving terminal input/output, keystroke handling, signal delivery, and process foreground/background transitions.

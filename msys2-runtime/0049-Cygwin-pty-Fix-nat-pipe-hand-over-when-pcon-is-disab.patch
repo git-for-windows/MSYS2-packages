@@ -1,0 +1,59 @@
+From 3d8be6bd4d3d9086c57856cf80c03258fdd16327 Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Tue, 3 Mar 2026 22:18:22 +0900
+Subject: [PATCH 49/N] Cygwin: pty: Fix nat pipe hand-over when pcon is
+ disabled
+
+The nat pipe ownership hand-over mechanism relies on the console
+process list - the set of processes attached to a console, enumerable
+via `GetConsoleProcessList()`. For non-cygwin process in pcon_activated
+case, this list contains all processes attached to the pseudo console.
+Otherwise, it contains all processes attached to the invisible console.
+
+04f386e9af (Cygwin: console: Inherit pcon hand over from parent pty,
+2024-10-31) added a last-resort fallback in `get_winpid_to_hand_over()`
+that hands nat pipe ownership to any process in the console process
+list, including Cygwin processes. This fallback is needed when a
+Cygwin process on the pseudo console (that might be exec'ed from non-
+cygwin process) must take over management of an active pseudo console
+after the original owner exits.
+
+When the pseudo console is disabled, this fallback incorrectly finds a
+Cygwin process (such as the shell) and assigns it nat pipe ownership,
+because both the original nat pipe owner and the shell are assosiated
+with the same invisible console. Since there is no console for that
+process to manage, ownership never gets released, input stays stuck on
+the nat pipe.
+
+Only the third (last-resort) call in the cascade needs guarding: the
+first two calls filter for native (non-Cygwin) processes via the `nat`
+parameter, and handing ownership to another native process is fine
+regardless of pcon state. It is only the fallback to Cygwin processes
+that is dangerous without an active pseudo console.
+
+Guard the fallback with a `pcon_activated` check, since handing nat
+pipe ownership to a Cygwin process only makes sense when there is an
+active pseudo console for it to manage.
+
+Fixes: 04f386e9af99 ("Cygwin: console: Inherit pcon hand over from parent pty")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Cherry-picked-from: 699c6892f1 (Cygwin: pty: Fix nat pipe hand-over when pcon is disabled, 2026-03-03)
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/pty.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index 90f5867..e07bbfe 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -3559,7 +3559,7 @@ fhandler_pty_slave::get_winpid_to_hand_over (tty *ttyp,
+       if (!switch_to)
+ 	switch_to = get_console_process_id (current_pid,
+ 					    false, true, false, true);
+-      if (!switch_to)
++      if (!switch_to && ttyp->pcon_activated)
+ 	switch_to = get_console_process_id (current_pid,
+ 					    false, false, false, false);
+     }

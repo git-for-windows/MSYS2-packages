@@ -1,0 +1,98 @@
+From b9d762742c58aa226f12346f1916488d482efa45 Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Sat, 28 Mar 2026 19:55:47 +0900
+Subject: [PATCH 54/N] Cygwin: console: Use input_mutex in the parent PTY in
+ master thread
+
+If the console is originating from pseudo console, the input into
+console is coming from PTY master. This is because:
+
+When the pseudo console is active, and a cygwin process is started
+from non-cygwin process, `cons_master_thread()` runs inside the
+Cygwin process that inherited the pseudo console from its parent
+PTY. It reads all `INPUT_RECORD`s from the console input buffer via
+`ReadConsoleInputW()`, processes signal-generating events (e.g. Ctrl+C),
+and writes the remaining records back via `WriteConsoleInputW()`.
+Meanwhile, the PTY master process (e.g. mintty) calls
+`fhandler_pty_master::write()`, which writes keystrokes to `to_slave_nat`
+(one end of the nat pipe). Conhost reads from the other end of that
+pipe, parses the byte stream through its VT input path, and inserts
+the resulting `INPUT_RECORD`s into the console input buffer.
+
+If `cons_master_thread()` reads the buffer and removes a signal record
+while conhost is simultaneously inserting new records from the PTY
+master's write, the verify step (`inrec_eq()`) finds records in the
+buffer that were not part of the original read, reports a mismatch, and
+enters the fixup path. That fixup path itself can disturb the record
+order, turning what was merely an interference into an actual problem.
+Acquiring the PTY's `input_mutex` in `cons_master_thread()` prevents
+`fhandler_pty_master::write()` from feeding new bytes into the pipe
+while the read-process-writeback-verify cycle is in progress.
+
+Use parent input_mutex as well as input_mutex in console device in
+cons_master_thread().
+
+Fixes: 04f386e9af99 ("Cygwin: console: Inherit pcon hand over from parent pty")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/console.cc | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/winsup/cygwin/fhandler/console.cc b/winsup/cygwin/fhandler/console.cc
+index 20c20de..6220a91 100644
+--- a/winsup/cygwin/fhandler/console.cc
++++ b/winsup/cygwin/fhandler/console.cc
+@@ -63,6 +63,7 @@ fhandler_console::console_state NO_COPY
+ static bool NO_COPY inside_pcon_checked = false;
+ static bool NO_COPY inside_pcon = false;
+ static int NO_COPY parent_pty;
++static HANDLE NO_COPY parent_pty_input_mutex = NULL;
+ 
+ bool NO_COPY fhandler_console::invisible_console;
+ 
+@@ -465,6 +466,8 @@ fhandler_console::cons_master_thread (handle_set_t *p, tty *ttyp)
+ 	  continue;
+ 	}
+       total_read = 0;
++      if (inside_pcon && parent_pty_input_mutex)
++	WaitForSingleObject (parent_pty_input_mutex, mutex_timeout);
+       switch (cygwait (p->input_handle, (DWORD) 0))
+ 	{
+ 	case WAIT_OBJECT_0:
+@@ -489,6 +492,8 @@ fhandler_console::cons_master_thread (handle_set_t *p, tty *ttyp)
+ 	default: /* Error */
+ 	  free (input_rec);
+ 	  free (input_tmp);
++	  if (inside_pcon && parent_pty_input_mutex)
++	    ReleaseMutex (parent_pty_input_mutex);
+ 	  ReleaseMutex (p->input_mutex);
+ 	  return;
+ 	}
+@@ -666,6 +671,8 @@ remove_record:
+ 	  while (true);
+ 	}
+ skip_writeback:
++      if (inside_pcon && parent_pty_input_mutex)
++	ReleaseMutex (parent_pty_input_mutex);
+       ReleaseMutex (p->input_mutex);
+       cygwait (40);
+     }
+@@ -1949,6 +1956,8 @@ fhandler_console::setup_pcon_hand_over ()
+ 	    inside_pcon = true;
+ 	    atexit (fhandler_console::pcon_hand_over_proc);
+ 	    parent_pty = i;
++	    parent_pty_input_mutex =
++	      cygwin_shared->tty[i]->open_input_mutex (MAXIMUM_ALLOWED);
+ 	    break;
+ 	  }
+       }
+@@ -1975,6 +1984,7 @@ fhandler_console::pcon_hand_over_proc (void)
+   else
+     system_printf("Acquiring pcon_ho_mutex failed.");
+   ReleaseMutex (mtx);
++  ForceCloseHandle (parent_pty_input_mutex);
+ }
+ 
+ bool

@@ -1,0 +1,50 @@
+From 10aff7d8f7857e1385025d5b44aec6402543aa6e Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Sat, 28 Mar 2026 19:55:45 +0900
+Subject: [PATCH 52/N] Cygwin: console: Fix master thread
+
+In Windows 11, key event with wRepeatCount == 0 is fixed-up to
+wRepeatCount == 1 in conhost.exe.
+https://github.com/microsoft/terminal/blob/v1.25.622.0/src/host/inputBuffer.cpp#L406
+
+The console master thread (`cons_master_thread`) reads INPUT_RECORDs
+from the console input buffer, processes signal-generating events,
+and writes the remaining records back. After the writeback, it peeks
+the buffer and uses `inrec_eq()` to verify that conhost stored the
+records faithfully. On Windows 11, conhost normalizes `wRepeatCount`
+from 0 to 1 on readback, causing `inrec_eq()` to report a mismatch
+and triggering an unnecessary fixup path. Treat 0 and 1 as equivalent
+for comparison purposes.
+
+Addresses: https://github.com/git-for-windows/git/issues/5632
+Fixes: ff4440fcf768 ("Cygwin: console: Introduce new thread which handles input signal.")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/console.cc | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/winsup/cygwin/fhandler/console.cc b/winsup/cygwin/fhandler/console.cc
+index 9e11611..80d6e34 100644
+--- a/winsup/cygwin/fhandler/console.cc
++++ b/winsup/cygwin/fhandler/console.cc
+@@ -318,9 +318,17 @@ inrec_eq (const INPUT_RECORD *a, const INPUT_RECORD *b, DWORD n)
+ 	     written event. Therefore they are ignored. */
+ 	  const KEY_EVENT_RECORD *ak = &a[i].Event.KeyEvent;
+ 	  const KEY_EVENT_RECORD *bk = &b[i].Event.KeyEvent;
++	  /* On Windows 11, conhost normalizes wRepeatCount from 0 to 1
++	     on readback. Treat them as equivalent for comparison. */
++	  WORD r1 = ak->wRepeatCount;
++	  WORD r2 = bk->wRepeatCount;
++	  if (r1 == 0)
++	    r1 = 1;
++	  if (r2 == 0)
++	    r2 = 1;
+ 	  if (ak->bKeyDown != bk->bKeyDown
+ 	      || ak->uChar.UnicodeChar != bk->uChar.UnicodeChar
+-	      || ak->wRepeatCount != bk->wRepeatCount)
++	      || r1 != r2)
+ 	    return false;
+ 	}
+       else if (a[i].EventType == MOUSE_EVENT)
