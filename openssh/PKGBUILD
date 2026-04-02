@@ -1,7 +1,7 @@
 # Maintainer: Alexey Pavlov <alexpux@gmail.com>
 
 pkgname=openssh
-pkgver=10.2p1
+pkgver=10.3p1
 pkgrel=1
 pkgdesc='Free version of the SSH connectivity tools'
 url='http://www.openssh.org/portable.html'
@@ -16,7 +16,7 @@ source=("https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/${pkgname}-${pkgve
         0003-openssh-skip-privilege-separation-tests.patch
         0004-Allow-scp-to-copy-files-that-start-with-a-Windows-dr.patch
         0005-Disallow-interop-tests-and-extra-tests-to-run-concur.patch)
-sha256sums=('ccc42c0419937959263fa1dbd16dafc18c56b984c03562d2937ce56a60f798b2'
+sha256sums=('56682a36bb92dcf4b4f016fd8ec8e74059b79a8de25c15d670d731e7d18e45f4'
             'SKIP'
             'ca1e4a8e6248cd4e36ece97005faff1cbd8bdfdda197be7194303a9e5209f492'
             '5d9a69b4e37dba1ecd87fa71a80743ba9563dd64b91698b1d667b6bcdac752ed'
@@ -40,6 +40,14 @@ prepare() {
 
 build() {
   cd "${srcdir}/${pkgname}-${pkgver}"
+
+  # The 32-bit MSYS2 runtime (3.3.x) exports arc4random_stir() in its
+  # import library but does not declare it in <stdlib.h>, causing a build
+  # failure with -Wimplicit-function-declaration. Tell configure the
+  # function is absent so the existing no-op macro in defines.h kicks in.
+  if [[ "$CARCH" == "i686" ]]; then
+    export ac_cv_func_arc4random_stir=no
+  fi
 
   TEST_SSH_UTF8=no \
   ./configure \
