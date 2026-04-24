@@ -1,4 +1,4 @@
-From 143d32363e1797664bbe3d86bb6df381175408b6 Mon Sep 17 00:00:00 2001
+From 28130fd8a6fa0ddf93cad4e18013fc1e5f828a8f Mon Sep 17 00:00:00 2001
 From: Richard Glidden <rglidden@brocksolutions.com>
 Date: Thu, 24 Aug 2023 13:36:10 -0400
 Subject: [PATCH 45/N] msys2-runtime: restore fast path for current user

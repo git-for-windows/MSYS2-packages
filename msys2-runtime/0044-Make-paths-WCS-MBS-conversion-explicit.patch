@@ -1,7 +1,7 @@
-From 74ca85b004e68f940e862917f2b28c0757a44d11 Mon Sep 17 00:00:00 2001
+From 18a5a8a91fa4d490f61eec0e7c53109d58313b58 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Fri, 18 Dec 2015 20:19:57 +0100
-Subject: [PATCH 43/N] Make paths' WCS->MBS conversion explicit
+Subject: [PATCH 44/N] Make paths' WCS->MBS conversion explicit
 
 	* dcrt0.cc (dll_crt0_1), dtable.cc (handle_to_fn), environ.cc
 	(environ_init, getwinenveq, build_env), external.cc
