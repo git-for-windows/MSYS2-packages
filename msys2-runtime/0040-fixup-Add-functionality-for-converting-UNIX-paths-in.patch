@@ -1,7 +1,7 @@
-From 520e5c933ddc43cc5d84bea5f9a856e6b29cedd7 Mon Sep 17 00:00:00 2001
+From d399a0dba77b5643b60351fbf8466acb1b81d47d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=EB=A7=88=EB=88=84=EC=97=98?= <nalla@hamal.uberspace.de>
 Date: Mon, 9 Mar 2015 16:24:43 +0100
-Subject: [PATCH 39/N] fixup! Add functionality for converting UNIX paths in
+Subject: [PATCH 40/N] fixup! Add functionality for converting UNIX paths in
  arguments and environment variables to Windows form for native Win32
  applications.
 MIME-Version: 1.0

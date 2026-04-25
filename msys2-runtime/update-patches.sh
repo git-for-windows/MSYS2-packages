@@ -17,7 +17,12 @@ die "Clean worktree required"
 git rm 0*.patch ||
 die "Could not remove previous patches"
 
-base_tag=refs/tags/"$(expr "$(git -C src/msys2-runtime/ describe --match 'cygwin-[0-9]*' --tags HEAD)" : '^\(cygwin-[0-9.]*\)')"
+base_tag=refs/tags/"$(git -C src/msys2-runtime/ for-each-ref \
+	--format='%(refname:short) %(ahead-behind:HEAD)' \
+	--sort='ahead-behind:HEAD' \
+	'refs/tags/cygwin-[0-9]*' |
+	sed -n 's/^\(cygwin-[0-9][0-9.]*\) 0 .*/\1/p' |
+	head -n 1)"
 source_url=$(sed -ne 's/git+https:/https:/' -e 's/^source=\([^:]\+::\)\?["'\'']\?\([^"'\''#?=&,;[:space:]]\+[^)"'\''#?=&,;[:space:]]\).*/\2/p' <PKGBUILD)
 
 git -C src/msys2-runtime fetch --no-tags "$source_url" "$base_tag:$base_tag"

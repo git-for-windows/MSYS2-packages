@@ -1,7 +1,7 @@
-From 0ee34fbd29b64bbbd888d2f15373fdfec1c80706 Mon Sep 17 00:00:00 2001
+From 38393aec39748a31a53ddd64de1b2a12bc4ef127 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Fri, 20 Feb 2015 13:56:22 +0000
-Subject: [PATCH 42/N] WIP Handle 8-bit characters under LOCALE=C
+Subject: [PATCH 43/N] WIP Handle 8-bit characters under LOCALE=C
 
 TODO!!! Verify that this is still needed, as it seems to be no longer
 necessary to pass Git's test suite because the official MSYS2 runtime
