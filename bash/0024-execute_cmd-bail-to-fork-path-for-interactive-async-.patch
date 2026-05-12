@@ -1,0 +1,70 @@
+From 1aa7f8cc455359649060b0ba9cc0e43bcf459f68 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 11 May 2026 21:02:38 +0200
+Subject: [PATCH 24/25] execute_cmd: bail to fork path for interactive async
+ commands
+
+The async-support commit unconditionally allowed `cmd &' through the
+spawnve fast path.  In non-interactive shells (the Git test suite
+case) this is correct: SIGINT is not delivered, there is no terminal
+contending for fd 0, and the regular path's setup_async_signals() /
+async_redirect_stdin() machinery is a no-op anyway.
+
+In interactive shells, those calls in the post-fork child matter:
+
+  - setup_async_signals() sets SIGINT and SIGQUIT to SIG_IGN in the
+    async child so that Ctrl-C in the parent terminal does not kill
+    the background job;
+  - async_redirect_stdin() (when CMD_STDIN_REDIR is set and stdin
+    has not been explicitly redirected by the user) dup2s fd 0 from
+    /dev/null so the background job does not steal the terminal's
+    input from the foreground parent.
+
+Cygwin's spawnve gives us no between-fork-and-exec hook to replicate
+either effect.  We could approximate setup_async_signals by setting
+SIGINT/SIGQUIT to SIG_IGN in the parent, spawnve'ing (the child
+inherits SIG_IGN, which the POSIX exec rules preserve across exec),
+and restoring -- but this opens a brief window where signals
+delivered to the parent are silently lost.  We could approximate
+async_redirect_stdin by adding a save/dup2/restore around fd 0, like
+the pipe-input path -- but it changes parent behavior in subtle
+ways.  Both deserve their own treatment in follow-up commits.
+
+For now, bail out of the fast path when `async && interactive_shell'.
+This preserves the correctness of background jobs in interactive
+shells while keeping the speedup for non-interactive scripts (where
+both setup functions are no-ops anyway).  Test scripts and the Git
+test suite continue to use the fast path for async commands; only
+people typing `cmd &' at an interactive prompt go through fork.
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 73cce6f..5312ace 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6308,6 +6308,17 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   /* Conditions we don't yet handle.  Bail out and let make_child do it. */
+   if (cmdflags & CMD_NO_FORK)
+     return FAST_SPAWN_DECLINE;
++  if (async && interactive_shell)
++    /* In interactive shells, the regular fork path runs
++       setup_async_signals() in the post-fork child to make the
++       background job ignore SIGINT and SIGQUIT, and (when
++       CMD_STDIN_REDIR is set and stdin is not explicitly redirected)
++       redirects stdin to /dev/null so the background job does not
++       compete for the terminal's input.  Cygwin's spawnve gives us
++       no between-fork-and-exec hook to replicate either effect.  In
++       non-interactive shells (the test-suite path) those effects do
++       not matter, so we keep the fast path enabled there. */
++    return FAST_SPAWN_DECLINE;
+   if (redirects && !fast_spawn_redirect_supported (redirects))
+     return FAST_SPAWN_DECLINE;
+ 
+-- 
+2.53.0.windows.1
+

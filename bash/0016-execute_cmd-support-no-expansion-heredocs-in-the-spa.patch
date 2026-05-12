@@ -1,0 +1,93 @@
+From 7c4b99c246bda49942d786a490e79adc2c0132d5 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 6 May 2026 22:55:29 +0200
+Subject: [PATCH 16/25] execute_cmd: support no-expansion heredocs in the
+ spawnve fast path
+
+Extend fast_spawn_redirect_one_supported to accept r_reading_until /
+r_deblank_reading_until (the `<<EOF' / `<<-EOF' instructions) when
+the redirectee word has W_QUOTED set.  W_QUOTED is the parser's
+record that the heredoc delimiter was quoted (`<<\EOF', `<<\'EOF\'',
+`<<\"EOF\"' etc.) and means heredoc_expand will return the body
+verbatim instead of running it through expand_string_to_string with
+Q_HERE_DOCUMENT.  Without W_QUOTED, expansion would run any `$(cmd)'
+inside the heredoc body in our parent shell rather than in the
+spawned child, which is the same parent-side-effects hazard that
+makes us bail on filename redirections containing command
+substitution.
+
+For the W_QUOTED subset, here_document_to_fd just writes the literal
+body to a temp file (unlinked at creation) and returns its read fd;
+do_redirection_internal then dup2s redirector onto it under the
+existing RX_UNDOABLE bookkeeping, so cleanup_redirects after spawnve
+restores the parent fd table normally and the spawned child inherits
+the read fd via spawnve's standard fd-table inheritance.
+
+Heredocs are pervasive in Git's test suite (~6000 instances across
+t/*.sh, ~50% of which use the no-expansion form -- 2974 of 5921
+matches in a quick survey).  Microbenchmark wins (200 iterations,
+warm averages, vs distro bash):
+
+  workload                        distro    patched   speedup
+  ------------------------------- --------  --------  -------
+  cat <<\EOF .. EOF >/dev/null    7.17s     3.32s     2.16x
+  heredoc | sort >/dev/null       12.57s    7.50s     1.68x
+
+Plain pipeline and t1022 numbers are unchanged from before; t1022
+specifically does not use heredocs in its hot path so it does not
+benefit here.
+
+Out of scope for this commit:
+
+  - Expanding heredocs (`<<EOF' without quoting).  Detecting that
+    expansion would have no observable side effects requires walking
+    the body for `$(' / backtick / `${VAR:=...}'-style assignment-
+    on-default; possible but more invasive than this initial cut.
+  - r_reading_string (`<<<word').  heredoc_expand always expands here-
+    strings regardless of W_QUOTED, so the same parent-side-effects
+    hazard applies.  Detecting safe here-strings would require
+    inspecting the word for substitution markers similarly to filename
+    redirections; deferred.
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index d43209f..a2ae973 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6092,6 +6092,28 @@ fast_spawn_redirect_one_supported (REDIRECT *r)
+ 	 list will reverse. */
+       return 1;
+ 
++    case r_reading_until:		/* <<EOF */
++    case r_deblank_reading_until:	/* <<-EOF */
++      /* Heredocs.  Allow only the no-expansion variants `<<\EOF' and
++	 `<<\'EOF\'', identified by W_QUOTED on the redirectee word.
++	 Without W_QUOTED, the body undergoes parameter / command /
++	 arithmetic expansion in heredoc_expand(), which would run any
++	 `$(cmd)' inside the body in our parent shell rather than in the
++	 spawned child.  When W_QUOTED is set the body is taken
++	 literally and here_document_to_fd just writes it to a temp file
++	 -- safe to do in the parent.
++
++	 here_document_to_fd creates a temp file (unlinked at creation
++	 so it does not survive a crash visibly), writes the body, and
++	 returns its read-only fd; do_redirection_internal then dup2s
++	 redirector onto it under RX_UNDOABLE bookkeeping, so
++	 cleanup_redirects after spawnve restores parent's fd table
++	 normally and the child inherits the read fd. */
++      if (r->redirectee.filename
++	  && (r->redirectee.filename->flags & W_QUOTED))
++	return 1;
++      return 0;
++
+     default:
+       /* Heredocs, here-strings, word-form fd duplications and the
+ 	 various move-fd instructions are intentionally excluded.  They
+-- 
+2.53.0.windows.1
+

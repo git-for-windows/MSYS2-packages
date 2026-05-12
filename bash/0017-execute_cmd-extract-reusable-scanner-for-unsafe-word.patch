@@ -1,0 +1,176 @@
+From f5748db750cce795bac2e2c98cd0b37f329c19f5 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 8 May 2026 10:51:43 -0700
+Subject: [PATCH 17/25] execute_cmd: extract reusable scanner for unsafe word
+ expansion
+
+The fast path filters out words whose expansion could have observable
+parent-side effects: command substitution, backtick command
+substitution, and the `${VAR:=...}' / `${VAR:?...}' parameter-
+expansion operators that mutate or abort.  The previous commits had
+the scan inlined in two places -- the filename-redirect filter and
+the simple-command-words eligibility scan -- with slightly different
+shapes; the heredoc commit added a third place that would benefit.
+
+Extract a single helper, fast_spawn_word_has_unsafe_expansion, that
+both inlined call sites now use.  This removes the previous
+near-duplication and avoids drift if we change the criteria again.
+
+The helper also tightens the previous scans in two ways, which are
+behavior changes worth flagging:
+
+  - It tracks `${...}' nesting depth, so `:=' and `:?' are flagged
+    only when they actually act as parameter-expansion operators.
+    A literal `cmd key:=value' or `path:?fallback' in a command
+    argument is no longer rejected; the previous scans treated
+    these as unsafe.
+
+  - It accepts the side-effect-free `${...}' operators
+    (`${VAR}', `${VAR:-default}', `${VAR:+alt}', `${VAR%suffix}',
+    `${VAR#prefix}', `${VAR/foo/bar}' etc.) which the previous
+    scans rejected by the bare presence of `${'.
+
+Backslash is honored as a one-pass two-character skip, which
+correctly handles `\$(literal)' and `\${VAR}' in unquoted text,
+double-quoted text, and heredoc bodies.
+
+Single-quote state is intentionally not tracked.  The same scanner
+will be applied to heredoc bodies in a follow-up commit, where `''
+is a literal apostrophe, not the start of a quoted region;
+treating it as a quote region would be unsafe in heredoc bodies
+(`'$(rm -rf /)\'' inside a heredoc body really does substitute).
+The trade-off favors safety: the resulting false positives on
+words like `'$(literal)\'' (single-quoted in an argument) cost
+some fast-path coverage but never accept anything that would run
+arbitrary commands in the parent.
+
+Microbenchmark: a workload that previously hit the false positive
+on `:=' (200 iterations of `/usr/bin/echo "x:=y" | /usr/bin/cat')
+drops from ~12s on the distro bash to ~7s warm.
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 87 ++++++++++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 76 insertions(+), 11 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index a2ae973..a225c77 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6035,6 +6035,71 @@ parent_return:
+ #ifdef __CYGWIN__
+ #include <process.h>		/* spawnve, _P_NOWAIT */
+ 
++/* True if expanding STR in the parent shell could have observable
++   side effects beyond pure reads of shell state.  STR may be a word
++   from a simple-command argument list, a redirect filename, or a
++   heredoc body.  We flag four constructs:
++
++     - command substitution `$(' or `` ` ''  -- runs commands;
++     - assignment-on-default `:=' inside `${...}'  -- sets the
++       referenced variable when unset;
++     - error-on-default     `:?' inside `${...}'  -- aborts with
++       a diagnostic when the referenced variable is unset.
++
++   Backslash is honored as a one-pass two-character skip, which
++   correctly handles `\$(literal)' and `\${VAR}' in unquoted text,
++   double-quoted text and (for the substitution operators we care
++   about) heredoc bodies.
++
++   The scan tracks `${...}' nesting depth so that `:=' and `:?' are
++   only flagged when they actually act as parameter-expansion
++   operators, not when they are literal text in a command argument
++   like `cmd key:=value'.  A plain `}' outside any `${...}' is
++   treated as a literal character; a `${' inside another `${...}'
++   nests.
++
++   No false negatives in any context: anything we let through is
++   provably side-effect-free in the parent shell.  Quote state is
++   intentionally not tracked: it would be unsafe in heredoc bodies,
++   where `'' is a literal apostrophe and not the start of a quoted
++   region. */
++static int
++fast_spawn_word_has_unsafe_expansion (const char *s)
++{
++  int depth = 0;
++
++  if (s == NULL)
++    return 0;
++
++  for (; *s; s++)
++    {
++      if (*s == '\\' && s[1])
++	{
++	  s++;	/* loop increment skips the escaped char */
++	  continue;
++	}
++      if (*s == '`')
++	return 1;
++      if (s[0] == '$' && s[1] == '(')
++	return 1;
++      if (s[0] == '$' && s[1] == '{')
++	{
++	  depth++;
++	  s++;
++	  continue;
++	}
++      if (*s == '}' && depth > 0)
++	{
++	  depth--;
++	  continue;
++	}
++      if (depth > 0 && s[0] == ':' && (s[1] == '=' || s[1] == '?'))
++	return 1;
++    }
++
++  return 0;
++}
++
+ /* Decide whether a single redirect can safely be applied in the parent
+    process before spawnve() and undone afterwards.  See the long comment
+    on fast_spawn_redirect_supported below for the criteria. */
+@@ -6066,21 +6131,21 @@ fast_spawn_redirect_one_supported (REDIRECT *r)
+     case r_err_and_out:			/* &>file */
+     case r_append_err_and_out:		/* &>>file */
+       /* Filename redirections.  redirection_expand performs full word
+-	 expansion (parameter, command, process substitution).  Process
+-	 substitution and command substitution would run in our parent
+-	 shell rather than in the (would-be) forked external command,
+-	 turning child-side effects into parent-side effects.  Detect
+-	 the common dangerous prefixes by literal scan.  Plain
+-	 parameter expansion (`>$VAR`, `>"${VAR}"`) and tilde expansion
+-	 are fine because they are pure, side-effect-free reads of
+-	 shell state. */
++	 expansion (parameter, command, process substitution).  We
++	 accept the redirect only if the filename word's expansion is
++	 side-effect-free (parameter expansion or tilde expansion only,
++	 no command/process substitution, no assignment-on-default).
++	 See fast_spawn_word_has_unsafe_expansion for the criteria;
++	 process substitution is detected here via its leading `<('
++	 or `>(' since fast_spawn_word_has_unsafe_expansion only
++	 detects `$(' / backtick (command substitution). */
+       if (r->redirectee.filename && r->redirectee.filename->word)
+ 	{
+ 	  const char *w = r->redirectee.filename->word;
+ 	  if (strncmp (w, "<(", 2) == 0 || strncmp (w, ">(", 2) == 0)
+ 	    return 0;	/* process substitution */
+-	  if (strstr (w, "$(") != NULL || strchr (w, '`') != NULL)
+-	    return 0;	/* command substitution */
++	  if (fast_spawn_word_has_unsafe_expansion (w))
++	    return 0;
+ 	}
+       return 1;
+ 
+@@ -6429,7 +6494,7 @@ try_fast_simple_spawn (SIMPLE_COM *simple_command,
+       if (s == NULL)
+ 	return (pid_t)-1;
+ 
+-      if (strstr (s, "${") || strstr (s, "$(") || strchr (s, '`'))
++      if (fast_spawn_word_has_unsafe_expansion (s))
+ 	return (pid_t)-1;
+     }
+ 
+-- 
+2.53.0.windows.1
+

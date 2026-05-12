@@ -1,0 +1,103 @@
+From 7cacae330818310a0676b2365493da8965b58607 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 5 May 2026 10:17:33 +0200
+Subject: [PATCH 08/25] jobs: add register_spawned_child for non-fork child
+ registration
+
+Factor out the parent-side bookkeeping that make_child() does after
+fork() so it can be reused by the upcoming MSYS2/Cygwin spawnv() fast
+path in execute_disk_command.
+
+The helper assumes the caller has already arranged the appropriate
+signal blocking around the spawn and the child startup; it does the
+same setpgid / add_process / last_made_pid / job-table dance that the
+parent branch of make_child() does, and nothing else.
+
+Guarded by __CYGWIN__ since this exists solely to support the spawnv
+path; on other platforms make_child() remains the only entry point and
+this code would just be dead weight.
+---
+ jobs.c | 52 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ jobs.h |  3 +++
+ 2 files changed, 55 insertions(+)
+
+diff --git a/jobs.c b/jobs.c
+index cbcc2c1..5e2511c 100644
+--- a/jobs.c
++++ b/jobs.c
+@@ -2501,6 +2501,58 @@ make_child (char *command, int flags)
+   return (pid);
+ }
+ 
++#ifdef __CYGWIN__
++/* Register a child created by spawnv() (or any non-fork mechanism) in
++   the job table.  This mirrors the parent-side bookkeeping of
++   make_child(), but assumes the caller has already arranged signal
++   blocking around the spawn and the child's process startup.
++   Returns PID. */
++pid_t
++register_spawned_child (pid_t pid, char *command, int flags)
++{
++  PROCESS *child;
++  int async_p;
++
++  async_p = (flags & FORK_ASYNC);
++
++  if (job_control)
++    {
++      if (pipeline_pgrp == 0)
++	pipeline_pgrp = pid;
++      if ((flags & FORK_NOJOB) == 0)
++	setpgid (pid, pipeline_pgrp);
++    }
++  else if (pipeline_pgrp == 0)
++    pipeline_pgrp = shell_pgrp;
++
++  /* Place all processes into the jobs array regardless of the
++     state of job_control. */
++  child = add_process (command, pid);
++
++  if (flags & FORK_PROCSUB)
++    child->flags |= PROC_PROCSUB;
++  if (flags & FORK_COMSUB)
++    child->flags |= PROC_COMSUB;
++
++  if (async_p)
++    last_asynchronous_pid = pid;
++#if defined (RECYCLES_PIDS)
++  else if (last_asynchronous_pid == pid)
++    last_asynchronous_pid = 1;
++#endif
++
++  delete_old_job (pid);
++  bgp_delete (pid);
++
++  last_made_pid = pid;
++
++  js.c_totforked++;
++  js.c_living++;
++
++  return pid;
++}
++#endif /* __CYGWIN__ */
++
+ /* These two functions are called only in child processes. */
+ void
+ ignore_tty_job_signals (void)
+diff --git a/jobs.h b/jobs.h
+index 64509e2..7b99881 100644
+--- a/jobs.h
++++ b/jobs.h
+@@ -295,6 +295,9 @@ extern void list_stopped_jobs (int);
+ extern void list_running_jobs (int);
+ 
+ extern pid_t make_child (char *, int);
++#ifdef __CYGWIN__
++extern pid_t register_spawned_child (pid_t, char *, int);
++#endif
+ 
+ extern int get_tty_state (void);
+ extern int set_tty_state (void);
+-- 
+2.53.0.windows.1
+

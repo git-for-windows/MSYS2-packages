@@ -1,0 +1,413 @@
+From 6f6df52be71ee531c2df20ed402ef26f9b70e738 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 11 May 2026 21:35:29 +0200
+Subject: [PATCH 25/25] execute_cmd: wrap the spawnve fast path in an
+ unwind-protect frame
+
+Until now `fast_spawn_command` rolled back its parent-side mutations
+(signal mask, fd 0 / fd 1 dups, FD_CLOEXEC bits on the
+fds_to_close bitmap, and the global redirection_undo_list /
+exec_redirection_undo_list swap) with two near-duplicated cleanup
+blocks: one for the success branch and one reached via
+`goto pipe_setup_fail`.  That worked for the failures the code knew
+to handle (redirection setup errors, spawnve returning -1) but left no
+backstop for any longjmp through the critical section.  In practice
+`do_redirections` and the xmalloc for `saved_cloexec` can both
+longjmp to top_level (fatal trap, OOM, an interrupt that retriggers
+the EXIT trap, ...), and on that path the parent would be left with
+fd 0 / fd 1 pointing at a pipe end, `redirection_undo_list`
+containing partial undos owned by the spawn that never completed, and
+signals still blocked.
+
+Move all five mutations under a single `begin_unwind_frame
+("fast_spawn_command")` and `run_unwind_frame` the frame at every
+exit point: success, `do_redirections` failure, spawnve failure, and
+the early dup/dup2/fcntl bail-outs.  Three small static callbacks
+(`uw_fast_spawn_restore_fd`, `uw_fast_spawn_restore_cloexec`,
+`uw_fast_spawn_restore_redirects`) plus a wrapper for sigprocmask
+share state with the function via stack-allocated structs.  LIFO
+registration order means restoration runs as redirects -> cloexec ->
+fd 1 -> fd 0 -> sigmask, matching the previous explicit cleanup.
+
+The `redir_save.active` flag distinguishes the window during
+do_redirections (the globals still hold our partial undos) from the
+window after we have moved the new undos into locals (and so a
+callback firing then must be a no-op so the caller's undo lists are
+not double-disposed).  The new undo lists are cleaned up explicitly
+after spawnve since they are no longer reachable through the global
+slot the callback consults; if a longjmp could occur between
+`redir_save.active = 0` and that cleanup, the lists would leak, but
+no call between those two points raises top_level.
+
+The success and failure paths now share one implementation.  The
+`pipe_setup_fail:` label, the parallel `saved_fd0`/`saved_fd1`/
+`saved_cloexec`/`saved_undo_list`/`saved_exec_undo_list`
+locals, and the duplicated dup2/fcntl/sigprocmask cleanup blocks are
+gone.
+
+Assisted-by: Claude Opus 4.7 (1M context)(Internal only)
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 246 ++++++++++++++++++++++++++++++--------------------
+ 1 file changed, 150 insertions(+), 96 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 5312ace..373d999 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6254,6 +6254,83 @@ fast_spawn_redirect_supported (REDIRECT *list)
+   return 1;
+ }
+ 
++/* Per-fd save state used by uw_fast_spawn_restore_fd to dup the saved
++   copy back over `target' on unwind.  Lives on the caller's stack;
++   `saved' is set to -1 by the callback after the restoration so a
++   subsequent explicit run of the frame is a no-op. */
++struct fast_spawn_fd_save
++{
++  int target;
++  int saved;
++};
++
++static void
++uw_fast_spawn_restore_fd (void *arg)
++{
++  struct fast_spawn_fd_save *s = arg;
++  if (s->saved >= 0)
++    {
++      dup2 (s->saved, s->target);
++      close (s->saved);
++      s->saved = -1;
++    }
++}
++
++/* fds_to_close-walk state.  saved[i] holds the original F_GETFD flags
++   for fd i (or -1 if that fd was not modified).  The callback restores
++   them, frees the array, and nulls it so a re-run is harmless. */
++struct fast_spawn_cloexec_save
++{
++  struct fd_bitmap *fds_to_close;
++  int *saved;
++};
++
++static void
++uw_fast_spawn_restore_cloexec (void *arg)
++{
++  struct fast_spawn_cloexec_save *s = arg;
++  int i;
++  if (s->saved == NULL)
++    return;
++  for (i = 0; i < s->fds_to_close->size; i++)
++    if (s->saved[i] >= 0)
++      fcntl (i, F_SETFD, s->saved[i]);
++  free (s->saved);
++  s->saved = NULL;
++}
++
++/* Redirection-undo-list swap state.  When `active' is non-zero the
++   global redirection_undo_list / exec_redirection_undo_list currently
++   hold partial undos owned by this function; the callback rolls them
++   back and restores the caller's saved lists.  When `active' is zero
++   (we have already moved the new undos into locals and put the caller's
++   lists back), the callback is a no-op. */
++struct fast_spawn_redir_save
++{
++  REDIRECT *saved_undo;
++  REDIRECT *saved_exec_undo;
++  int active;
++};
++
++static void
++uw_fast_spawn_restore_redirects (void *arg)
++{
++  struct fast_spawn_redir_save *s = arg;
++  if (!s->active)
++    return;
++  cleanup_redirects (redirection_undo_list);
++  dispose_redirects (exec_redirection_undo_list);
++  redirection_undo_list = s->saved_undo;
++  exec_redirection_undo_list = s->saved_exec_undo;
++  s->active = 0;
++}
++
++static void
++uw_fast_spawn_restore_sigmask (void *arg)
++{
++  sigprocmask (SIG_SETMASK, (sigset_t *)arg, (sigset_t *)NULL);
++}
++
+ /* MSYS2/Cygwin fast path for execute_disk_command.  Uses spawnve() to
+    create the child process, which goes straight to CreateProcess() on
+    Windows.  This is roughly twice as fast as fork()+execve() because
+@@ -6284,7 +6361,17 @@ fast_spawn_redirect_supported (REDIRECT *list)
+    regular fork path achieves the same effect in the post-fork child
+    via do_piping() and close_fd_bitmap(); we have to do it here in the
+    parent because spawnve does not give us a "between fork and exec"
+-   hook to run code in the child. */
++   hook to run code in the child.
++
++   All mutations of process-wide state (signal mask, fd 0 / fd 1, the
++   FD_CLOEXEC flags on fds_to_close, and the global redirection-undo
++   lists) are guarded by a single unwind-protect frame.  If
++   xmalloc(), do_redirections(), or any other call between
++   begin_unwind_frame() and discard_unwind_frame() longjmps to
++   top_level (OOM, fatal trap, etc.), throw_to_top_level will run the
++   frame and roll each mutation back in reverse order.  On the normal
++   exit paths we run the frame explicitly to perform the same cleanup,
++   so the success and failure branches share one implementation. */
+ static pid_t
+ fast_spawn_command (char *command, WORD_LIST *words,
+ 		    REDIRECT *redirects, char *command_line,
+@@ -6295,13 +6382,13 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   pid_t pid;
+   sigset_t set, oset;
+   int fork_flags;
+-  REDIRECT *saved_undo_list = NULL;
+-  REDIRECT *saved_exec_undo_list = NULL;
+   REDIRECT *new_undo_list = NULL;
+   REDIRECT *new_exec_undo_list = NULL;
+   int redirected = 0;
+-  int saved_fd0 = -1, saved_fd1 = -1;
+-  int *saved_cloexec = NULL;
++  struct fast_spawn_fd_save fd0_save = { 0, -1 };
++  struct fast_spawn_fd_save fd1_save = { 1, -1 };
++  struct fast_spawn_cloexec_save cloexec_save = { NULL, NULL };
++  struct fast_spawn_redir_save redir_save = { NULL, NULL, 0 };
+   int i;
+   pid_t fail_status = FAST_SPAWN_DECLINE;
+ 
+@@ -6322,6 +6409,8 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   if (redirects && !fast_spawn_redirect_supported (redirects))
+     return FAST_SPAWN_DECLINE;
+ 
++  begin_unwind_frame ("fast_spawn_command");
++
+   /* Mirror make_child's signal blocking around the spawn so that SIGCHLD
+      for the new child is held until we have registered it in the job
+      table.  Otherwise waitchld() could fire before add_process().  We
+@@ -6333,6 +6422,7 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   sigaddset (&set, SIGTERM);
+   sigemptyset (&oset);
+   sigprocmask (SIG_BLOCK, &set, &oset);
++  add_unwind_protect (uw_fast_spawn_restore_sigmask, &oset);
+ 
+   /* Set up pipe_in -> fd 0 and pipe_out -> fd 1 in the parent.  We
+      keep the originals as save fds (with FD_CLOEXEC so spawnve does
+@@ -6341,38 +6431,51 @@ fast_spawn_command (char *command, WORD_LIST *words,
+      and will close them once we return; we do not close them here. */
+   if (pipe_in != NO_PIPE)
+     {
+-      saved_fd0 = dup (0);
+-      if (saved_fd0 < 0
+-	  || fcntl (saved_fd0, F_SETFD, FD_CLOEXEC) < 0
++      fd0_save.saved = dup (0);
++      if (fd0_save.saved < 0
++	  || fcntl (fd0_save.saved, F_SETFD, FD_CLOEXEC) < 0
+ 	  || dup2 (pipe_in, 0) < 0)
+-	goto pipe_setup_fail;
++	{
++	  run_unwind_frame ("fast_spawn_command");
++	  return FAST_SPAWN_DECLINE;
++	}
++      add_unwind_protect (uw_fast_spawn_restore_fd, &fd0_save);
+     }
+   if (pipe_out != NO_PIPE)
+     {
+-      saved_fd1 = dup (1);
+-      if (saved_fd1 < 0
+-	  || fcntl (saved_fd1, F_SETFD, FD_CLOEXEC) < 0
++      fd1_save.saved = dup (1);
++      if (fd1_save.saved < 0
++	  || fcntl (fd1_save.saved, F_SETFD, FD_CLOEXEC) < 0
+ 	  || dup2 (pipe_out, 1) < 0)
+-	goto pipe_setup_fail;
++	{
++	  run_unwind_frame ("fast_spawn_command");
++	  return FAST_SPAWN_DECLINE;
++	}
++      add_unwind_protect (uw_fast_spawn_restore_fd, &fd1_save);
+     }
+ 
+   /* fds_to_close holds pipe ends inherited from neighboring pipeline
+      stages that the child must not see.  In the regular path the
+      post-fork child closes them via close_fd_bitmap(); spawnve gives
+      us no such hook, so we set FD_CLOEXEC on each listed fd before
+-     the spawn and restore the previous flag bits after. */
++     the spawn and restore the previous flag bits after.  We register
++     the unwind callback before populating the array so an xmalloc()
++     longjmp (impossible in practice for xmalloc, which never returns
++     NULL, but defended for clarity) leaves the structure consistent. */
+   if (fds_to_close && fds_to_close->size > 0)
+     {
+-      saved_cloexec = (int *)xmalloc (fds_to_close->size * sizeof (int));
++      cloexec_save.fds_to_close = fds_to_close;
++      cloexec_save.saved = (int *)xmalloc (fds_to_close->size * sizeof (int));
++      add_unwind_protect (uw_fast_spawn_restore_cloexec, &cloexec_save);
+       for (i = 0; i < fds_to_close->size; i++)
+ 	{
+-	  saved_cloexec[i] = -1;
++	  cloexec_save.saved[i] = -1;
+ 	  if (fds_to_close->bitmap[i])
+ 	    {
+ 	      int flags = fcntl (i, F_GETFD);
+ 	      if (flags >= 0)
+ 		{
+-		  saved_cloexec[i] = flags;
++		  cloexec_save.saved[i] = flags;
+ 		  fcntl (i, F_SETFD, flags | FD_CLOEXEC);
+ 		}
+ 	    }
+@@ -6389,32 +6492,31 @@ fast_spawn_command (char *command, WORD_LIST *words,
+      these globals at entry under RX_UNDOABLE). */
+   if (redirects)
+     {
+-      saved_undo_list = redirection_undo_list;
+-      saved_exec_undo_list = exec_redirection_undo_list;
++      redir_save.saved_undo = redirection_undo_list;
++      redir_save.saved_exec_undo = exec_redirection_undo_list;
+       redirection_undo_list = (REDIRECT *)NULL;
+       exec_redirection_undo_list = (REDIRECT *)NULL;
++      redir_save.active = 1;
++      add_unwind_protect (uw_fast_spawn_restore_redirects, &redir_save);
+ 
+       if (do_redirections (redirects, RX_ACTIVE | RX_UNDOABLE) != 0)
+ 	{
+ 	  /* Redirection failed; do_redirections has already printed an
+ 	     error and recorded inverse ops for whatever it managed to
+-	     apply.  Roll those back, restore the caller's undo lists,
+-	     restore pipes/cloexec, unblock signals, and return
+-	     FAST_SPAWN_FAILED to tell the caller the failure has
+-	     already been reported and a fork-path retry would just
+-	     duplicate the diagnostic. */
+-	  cleanup_redirects (redirection_undo_list);
+-	  dispose_redirects (exec_redirection_undo_list);
+-	  redirection_undo_list = saved_undo_list;
+-	  exec_redirection_undo_list = saved_exec_undo_list;
++	     apply.  Let the unwind frame roll those back (and restore
++	     pipes/cloexec/sigmask), and return FAST_SPAWN_FAILED so the
++	     caller does not retry via the fork path and duplicate the
++	     diagnostic. */
+ 	  fail_status = FAST_SPAWN_FAILED;
+-	  goto pipe_setup_fail;
++	  run_unwind_frame ("fast_spawn_command");
++	  return fail_status;
+ 	}
+ 
+       new_undo_list = redirection_undo_list;
+       new_exec_undo_list = exec_redirection_undo_list;
+-      redirection_undo_list = saved_undo_list;
+-      exec_redirection_undo_list = saved_exec_undo_list;
++      redirection_undo_list = redir_save.saved_undo;
++      exec_redirection_undo_list = redir_save.saved_exec_undo;
++      redir_save.active = 0;
+       redirected = 1;
+ 
+       /* Force FD_CLOEXEC on each save fd in the undo list before the
+@@ -6456,87 +6558,39 @@ fast_spawn_command (char *command, WORD_LIST *words,
+ 
+   strvec_dispose (args);
+ 
+-  /* Restore the parent's fd table now that the child (which inherited
+-     the redirected fds) is launched.  The exec-undo entries we built
+-     are no longer needed; dispose them rather than apply them, since
+-     they only matter when the parent is going to exec() (i.e. the
+-     `exec >file' builtin path), which is not our case. */
++  /* Dispose of the new undo lists we captured into locals.  These are
++     not in the global slots any more so the unwind callback doesn't
++     see them; we must release them ourselves on every exit path past
++     this point.  The exec-undo entries only matter when the parent is
++     about to exec() (i.e. the `exec >file' builtin path), which is not
++     our case, so dispose rather than apply. */
+   if (redirected)
+     {
+       cleanup_redirects (new_undo_list);
+       dispose_redirects (new_exec_undo_list);
+     }
+ 
+-  /* Restore FD_CLOEXEC on neighboring-pipe-stage fds. */
+-  if (saved_cloexec)
+-    {
+-      for (i = 0; i < fds_to_close->size; i++)
+-	if (saved_cloexec[i] >= 0)
+-	  fcntl (i, F_SETFD, saved_cloexec[i]);
+-      free (saved_cloexec);
+-      saved_cloexec = NULL;
+-    }
+-
+-  /* Restore fd 1, then fd 0.  Restoration order is the reverse of
+-     setup order so that if pipe_in == 1 (fd 1 used as a pipe input)
+-     the dup2 chain stays correct. */
+-  if (saved_fd1 >= 0)
+-    {
+-      dup2 (saved_fd1, 1);
+-      close (saved_fd1);
+-      saved_fd1 = -1;
+-    }
+-  if (saved_fd0 >= 0)
+-    {
+-      dup2 (saved_fd0, 0);
+-      close (saved_fd0);
+-      saved_fd0 = -1;
+-    }
+-
+   if (pid < 0)
+     {
+-      /* spawnve failed; restore signals and fall back to fork+exec.
+-	 (No diagnostic was printed; the fork path will report any
+-	 error from the child.) */
+-      sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++      /* spawnve failed; let the unwind frame restore pipes, cloexec
++	 and signal mask, then fall back to fork+exec.  (No diagnostic
++	 was printed; the fork path will report any error from the
++	 child.) */
++      run_unwind_frame ("fast_spawn_command");
+       return FAST_SPAWN_DECLINE;
+     }
+ 
+   fork_flags = async ? FORK_ASYNC : 0;
+   register_spawned_child (pid, savestring (command_line), fork_flags);
+ 
+-  /* Unblock signals now that the child is registered; a pending SIGCHLD
+-     will be delivered and waitchld() will find the child in the job
+-     table just as it would for a forked one. */
+-  sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++  /* Successful spawn: run the unwind frame to perform the standard
++     cleanup (restore fds, cloexec flags, signal mask).  Signals stay
++     blocked until uw_fast_spawn_restore_sigmask fires last so that a
++     pending SIGCHLD cannot be delivered before register_spawned_child
++     has put the child in the job table. */
++  run_unwind_frame ("fast_spawn_command");
+ 
+   return pid;
+-
+-pipe_setup_fail:
+-  /* Restore everything we set up.  The order matches the cleanup path
+-     above: restore CLOEXEC on neighboring fds, then restore fd 1,
+-     then fd 0, then unblock signals.  saved_fd0/saved_fd1 may be -1
+-     if the corresponding setup never ran or never finished; close()
+-     and dup2() on -1 are skipped explicitly. */
+-  if (saved_cloexec)
+-    {
+-      for (i = 0; i < fds_to_close->size; i++)
+-	if (saved_cloexec[i] >= 0)
+-	  fcntl (i, F_SETFD, saved_cloexec[i]);
+-      free (saved_cloexec);
+-    }
+-  if (saved_fd1 >= 0)
+-    {
+-      dup2 (saved_fd1, 1);
+-      close (saved_fd1);
+-    }
+-  if (saved_fd0 >= 0)
+-    {
+-      dup2 (saved_fd0, 0);
+-      close (saved_fd0);
+-    }
+-  sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
+-  return fail_status;
+ }
+ 
+ /* Bypass the early fork in execute_simple_command for pipeline /
+-- 
+2.53.0.windows.1
+
