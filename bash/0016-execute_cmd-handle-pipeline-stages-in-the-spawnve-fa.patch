@@ -1,0 +1,265 @@
+From 14ec9f04879c674186e0d2be4e18afa099b78092 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 6 May 2026 18:06:56 +0200
+Subject: [PATCH 16/N] execute_cmd: handle pipeline stages in the spawnve fast
+ path
+
+Extend the fast-spawn path to accept `pipe_in`, `pipe_out` and
+`fds_to_close`, which previously caused an unconditional bail-out.  The
+fork path applies these in the post-fork child via `do_piping()` and
+`close_fd_bitmap()`; the fast-spawn path has no such hook, so it
+emulates the same effect in the parent before `spawnve()` and reverses
+it afterwards.
+
+File descriptors that need to be temporarily overridden are duplicated
+with `FD_CLOEXEC` to avoid them leaking into the spawned child process,
+and restored in reverse order after the spawn.
+
+Microbenchmark results (200 iterations, warm averages, versus the
+unpatched Bash):
+
+  workload                            distro    patched
+  ----------------------------------- -------   --------
+  /usr/bin/true                       7.7s      4.0s    (1.93x)
+  /usr/bin/true >/dev/null 2>&1       7.7s      4.0s    (1.93x)
+  /usr/bin/true | /usr/bin/cat       13.7s     15.2s    (0.90x)
+  t1022-read-tree-partial-clone.sh    4.9s      2.4s    (2.05x)
+
+The 2-stage-pipeline microbench is at parity with unpatched Bash, but
+slightly slower (~10%); each pipeline stage now does extra parent-side
+fd surgery (`dup()`, `fcntl()`, `dup2()` setup and restore) that the
+fork path got for free in the post-fork child. Real Git tests like t1022
+still see a 2.05x speedup overall because they are dominated by plain
+externals and redirected externals where the fast path's spawnve-vs-fork
+advantage is large.
+
+This change also tightens the redirection filter to bail out on filename
+redirections containing command substitution (`$(cmd)` or backticks).
+Without that filter, a redirect like `>"$(VAR=foo cmd)"` would have
+`redirection_expand()` run the substitution in the parent shell, leaking
+variable assignments and trap effects that the fork path would have
+isolated to the child. Plain parameter expansion (`>"$VAR"`,
+`>"${VAR}"`) and tilde expansion remain accepted; they are pure reads of
+shell state.
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 149 +++++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 122 insertions(+), 27 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 5321259..48918e8 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6491,16 +6491,23 @@ fast_spawn_redirect_one_supported (REDIRECT *r)
+     case r_output_force:		/* >|file (noclobber bypass) */
+     case r_err_and_out:			/* &>file */
+     case r_append_err_and_out:		/* &>>file */
+-      /* Filename redirections.  Detect process substitution (`<(cmd)`,
+-	 `>(cmd)`) and bail; redirection_expand() would spawn the
+-	 substitution children as children of the main shell rather than
+-	 of the (would-be) forked external command, with substantial
+-	 follow-on bookkeeping. */
+-      if (r->redirectee.filename
+-	  && r->redirectee.filename->word
+-	  && (strncmp (r->redirectee.filename->word, "<(", 2) == 0
+-	      || strncmp (r->redirectee.filename->word, ">(", 2) == 0))
+-	return 0;
++      /* Filename redirections.  redirection_expand performs full word
++	 expansion (parameter, command, process substitution).  Process
++	 substitution and command substitution would run in our parent
++	 shell rather than in the (would-be) forked external command,
++	 turning child-side effects into parent-side effects.  Detect
++	 the common dangerous prefixes by literal scan.  Plain
++	 parameter expansion (`>$VAR`, `>"${VAR}"`) and tilde expansion
++	 are fine because they are pure, side-effect-free reads of
++	 shell state. */
++      if (r->redirectee.filename && r->redirectee.filename->word)
++	{
++	  const char *w = r->redirectee.filename->word;
++	  if (strncmp (w, "<(", 2) == 0 || strncmp (w, ">(", 2) == 0)
++	    return 0;	/* process substitution */
++	  if (strstr (w, "$(") != NULL || strchr (w, '`') != NULL)
++	    return 0;	/* command substitution */
++	}
+       return 1;
+ 
+     case r_duplicating_input:		/* <&N (constant fd) */
+@@ -6573,6 +6580,9 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   REDIRECT *new_undo_list = NULL;
+   REDIRECT *new_exec_undo_list = NULL;
+   int redirected = 0;
++  int saved_fd0 = -1, saved_fd1 = -1;
++  int *saved_cloexec = NULL;
++  int i;
+ 
+   /* Runtime escape hatch: when `shopt -s nofastspawn' is in effect,
+      always decline so the caller falls through to the regular
+@@ -6582,8 +6592,6 @@ fast_spawn_command (char *command, WORD_LIST *words,
+     return FAST_SPAWN_DECLINE;
+ 
+   /* Conditions we don't yet handle.  Bail out and let make_child do it. */
+-  if (pipe_in != NO_PIPE || pipe_out != NO_PIPE)
+-    return FAST_SPAWN_DECLINE;
+   if (async)
+     return FAST_SPAWN_DECLINE;
+   if (cmdflags & CMD_NO_FORK)
+@@ -6591,16 +6599,6 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   if (redirects && !fast_spawn_redirect_supported (redirects))
+     return FAST_SPAWN_DECLINE;
+ 
+-  /* If there are inherited pipe fds that the child must not see,
+-     fall back; the regular path closes them in the child after fork. */
+-  if (fds_to_close)
+-    {
+-      int i;
+-      for (i = 0; i < fds_to_close->size; i++)
+-	if (fds_to_close->bitmap[i])
+-	  return FAST_SPAWN_DECLINE;
+-    }
+-
+   /* Mirror make_child's signal blocking around the spawn so that SIGCHLD
+      for the new child is held until we have registered it in the job
+      table.  Otherwise waitchld() could fire before add_process().  We
+@@ -6613,7 +6611,52 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   sigemptyset (&oset);
+   sigprocmask (SIG_BLOCK, &set, &oset);
+ 
+-  /* Apply redirections in the parent.  The regular path does this in
++  /* Set up pipe_in -> fd 0 and pipe_out -> fd 1 in the parent.  We
++     keep the originals as save fds (with FD_CLOEXEC so spawnve does
++     not leak them to the child) for restoration after spawnve.  The
++     pipeline coordinator in execute_pipeline owns pipe_in / pipe_out
++     and will close them once we return; we do not close them here. */
++  if (pipe_in != NO_PIPE)
++    {
++      saved_fd0 = dup (0);
++      if (saved_fd0 < 0
++	  || fcntl (saved_fd0, F_SETFD, FD_CLOEXEC) < 0
++	  || dup2 (pipe_in, 0) < 0)
++	goto pipe_setup_fail;
++    }
++  if (pipe_out != NO_PIPE)
++    {
++      saved_fd1 = dup (1);
++      if (saved_fd1 < 0
++	  || fcntl (saved_fd1, F_SETFD, FD_CLOEXEC) < 0
++	  || dup2 (pipe_out, 1) < 0)
++	goto pipe_setup_fail;
++    }
++
++  /* fds_to_close holds pipe ends inherited from neighboring pipeline
++     stages that the child must not see.  In the regular path the
++     post-fork child closes them via close_fd_bitmap(); spawnve gives
++     us no such hook, so we set FD_CLOEXEC on each listed fd before
++     the spawn and restore the previous flag bits after. */
++  if (fds_to_close && fds_to_close->size > 0)
++    {
++      saved_cloexec = (int *)xmalloc (fds_to_close->size * sizeof (int));
++      for (i = 0; i < fds_to_close->size; i++)
++	{
++	  saved_cloexec[i] = -1;
++	  if (fds_to_close->bitmap[i])
++	    {
++	      int flags = fcntl (i, F_GETFD);
++	      if (flags >= 0)
++		{
++		  saved_cloexec[i] = flags;
++		  fcntl (i, F_SETFD, flags | FD_CLOEXEC);
++		}
++	    }
++	}
++    }
++
++  /* Apply user redirections.  The regular path does this in the
+      the post-fork child where the fork has given it a private fd table;
+      we don't have that luxury, so we ask do_redirections for the undo
+      ops and replay them after spawnve to restore our fds.  We swap
+@@ -6633,14 +6676,14 @@ fast_spawn_command (char *command, WORD_LIST *words,
+ 	  /* Redirection failed; do_redirections has already printed an
+ 	     error and recorded inverse ops for whatever it managed to
+ 	     apply.  Roll those back, restore the caller's undo lists,
+-	     unblock signals, and fall back to the fork path so the
+-	     child fails the same way under the existing machinery. */
++	     restore pipes/cloexec, unblock signals, and fall back to
++	     the fork path so the child fails the same way under the
++	     existing machinery. */
+ 	  cleanup_redirects (redirection_undo_list);
+ 	  dispose_redirects (exec_redirection_undo_list);
+ 	  redirection_undo_list = saved_undo_list;
+ 	  exec_redirection_undo_list = saved_exec_undo_list;
+-	  sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
+-	  return FAST_SPAWN_DECLINE;
++	  goto pipe_setup_fail;
+ 	}
+ 
+       new_undo_list = redirection_undo_list;
+@@ -6670,6 +6713,32 @@ fast_spawn_command (char *command, WORD_LIST *words,
+       dispose_redirects (new_exec_undo_list);
+     }
+ 
++  /* Restore FD_CLOEXEC on neighboring-pipe-stage fds. */
++  if (saved_cloexec)
++    {
++      for (i = 0; i < fds_to_close->size; i++)
++	if (saved_cloexec[i] >= 0)
++	  fcntl (i, F_SETFD, saved_cloexec[i]);
++      free (saved_cloexec);
++      saved_cloexec = NULL;
++    }
++
++  /* Restore fd 1, then fd 0.  Restoration order is the reverse of
++     setup order so that if pipe_in == 1 (fd 1 used as a pipe input)
++     the dup2 chain stays correct. */
++  if (saved_fd1 >= 0)
++    {
++      dup2 (saved_fd1, 1);
++      close (saved_fd1);
++      saved_fd1 = -1;
++    }
++  if (saved_fd0 >= 0)
++    {
++      dup2 (saved_fd0, 0);
++      close (saved_fd0);
++      saved_fd0 = -1;
++    }
++
+   if (pid < 0)
+     {
+       /* spawnve failed; restore signals and fall back to fork+exec. */
+@@ -6686,5 +6755,31 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
+ 
+   return pid;
++
++pipe_setup_fail:
++  /* Restore everything we set up.  The order matches the cleanup path
++     above: restore CLOEXEC on neighboring fds, then restore fd 1,
++     then fd 0, then unblock signals.  saved_fd0/saved_fd1 may be -1
++     if the corresponding setup never ran or never finished; close()
++     and dup2() on -1 are skipped explicitly. */
++  if (saved_cloexec)
++    {
++      for (i = 0; i < fds_to_close->size; i++)
++	if (saved_cloexec[i] >= 0)
++	  fcntl (i, F_SETFD, saved_cloexec[i]);
++      free (saved_cloexec);
++    }
++  if (saved_fd1 >= 0)
++    {
++      dup2 (saved_fd1, 1);
++      close (saved_fd1);
++    }
++  if (saved_fd0 >= 0)
++    {
++      dup2 (saved_fd0, 0);
++      close (saved_fd0);
++    }
++  sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++  return FAST_SPAWN_DECLINE;
+ }
+ #endif /* __CYGWIN__ */
+-- 
+2.54.0.windows.1
+

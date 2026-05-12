@@ -1,0 +1,69 @@
+From dd76c611477c0881c8ebf5a7ec93dff3205a5b81 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 11 May 2026 17:52:56 +0200
+Subject: [PATCH 24/N] execute_cmd: remove dead REDIRECT_BOTH bail-out from
+ fast path
+
+The `if (pipe_out == REDIRECT_BOTH) return FAST_SPAWN_DECLINE` guard in
+`fast_spawn_command()` is unreachable. The parser at `parse.y:1473-1481`
+rewrites `cmd1 |& cmd2` as `cmd1 2>&1 | cmd2` at parse time:
+
+        |       pipeline BAR_AND newline_list pipeline
+                        {
+                          /* Make cmd1 |& cmd2 equivalent to cmd1 2>&1 | cmd2 */
+                          COMMAND *tc;
+                          ...
+                        }
+
+So by the time `execute_pipeline()` runs, the AST has a plain `|`
+connector with an extra `r_err_and_out` redirect on the left command.
+The fast path handles that pipeline form already; the extra `2>&1` is
+a regular `r_duplicating_output` redirect which the redirection filter
+accepts. Remove the guard.
+
+`REDIRECT_BOTH` (the constant value `-2` in `shell.h`) is still
+referenced by `do_piping()` in case it is invoked elsewhere with
+`REDIRECT_BOTH` as `pipe_out` (coprocess plumbing, for instance), but it
+is no longer an exclusion on the fast path.
+
+Verified manually:
+
+  $ sh -c 'echo out; echo err >&2' |& sort
+  err
+  out
+
+  $ sh -c 'echo out; echo err >&2' 2>&1 | sort
+  err
+  out
+
+Both forms take the fast path and produce identical output. The
+function's doc comment is updated at the same time to reflect the
+current bail-out conditions (the `async` and `REDIRECT_BOTH` entries no
+longer apply).
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 925b2e4..28d2a18 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6772,12 +6772,6 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   /* Conditions we don't yet handle.  Bail out and let make_child do it. */
+   if (cmdflags & CMD_NO_FORK)
+     return FAST_SPAWN_DECLINE;
+-  if (pipe_out == REDIRECT_BOTH)
+-    /* `cmd |& next' merges stderr into the pipe.  do_piping handles
+-       this by dup2(1, 2) AFTER the rest of the pipe redirection has
+-       happened; we'd need to interleave that into our pipe setup
+-       below.  Defer to a follow-up.  */
+-    return FAST_SPAWN_DECLINE;
+   if (redirects && !fast_spawn_redirect_supported (redirects))
+     return FAST_SPAWN_DECLINE;
+ 
+-- 
+2.54.0.windows.1
+

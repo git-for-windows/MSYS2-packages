@@ -1,0 +1,80 @@
+From 361be1820aa3a207de0d84de0885ce0c24f5c342 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 29 May 2026 16:48:43 +0200
+Subject: [PATCH 13/N] execute_cmd: introduce `FAST_SPAWN_*` sentinels
+
+Distinguish the return values of `fast_spawn_command()` to report
+precisely whether the fast-spawn code path was _declined_ or whether it
+_failed_. This is important to be able to avoid trying the slow path
+when the fast path failed, and to set the exit code correctly.
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 31 +++++++++++++++++++++++++++----
+ 1 file changed, 27 insertions(+), 4 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index b45d472..86637c7 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -181,6 +181,19 @@ static int execute_disk_command (WORD_LIST *, REDIRECT *, char *,
+ 				      int, int, int, struct fd_bitmap *, int);
+ 
+ #ifdef __CYGWIN__
++/* Sentinels to distinguish between a declined vs a failed fast-spawn. */
++#define FAST_SPAWN_DECLINE	((pid_t)-1)	/* not eligible / not
++						   attempted; caller should
++						   fall back to the regular
++						   fork+exec path. */
++#define FAST_SPAWN_FAILED	((pid_t)-2)	/* parent-side redirection
++						   or pipe setup failed and
++						   the diagnostic has already
++						   been printed; caller should
++						   set last_command_exit_value
++						   to EXECUTION_FAILURE and
++						   NOT retry via fork+exec. */
++
+ static pid_t fast_spawn_command (char *, WORD_LIST *, REDIRECT *,
+ 				 char *, int, int, int,
+ 				 struct fd_bitmap *, int);
+@@ -5846,13 +5859,23 @@ execute_disk_command (WORD_LIST *words, REDIRECT *redirects, char *command_line,
+     {
+       fork_flags = async ? FORK_ASYNC : 0;
+ #ifdef __CYGWIN__
++      /* Try the MSYS2/Cygwin spawnve()-based fast path before falling
++	 back to fork()+execve().  The helper may return a positive pid
++	 (registered child), FAST_SPAWN_DECLINE (fall through to
++	 make_child), or FAST_SPAWN_FAILED (parent-side preparation
++	 failed and a diagnostic has been printed; do not retry). */
+       pid = (command != 0)
+ 	      ? fast_spawn_command (command, words, redirects,
+ 				    command_line, pipe_in,
+ 				    pipe_out, async, fds_to_close,
+ 				    cmdflags)
+-	      : (pid_t)-1;
+-      if (pid == (pid_t)-1)
++	      : FAST_SPAWN_DECLINE;
++      if (pid == FAST_SPAWN_FAILED)
++	{
++	  result = last_command_exit_value = EXECUTION_FAILURE;
++	  goto parent_return;
++	}
++      if (pid == FAST_SPAWN_DECLINE)
+ 	pid = make_child (p = savestring (command_line), fork_flags);
+ #else
+       pid = make_child (p = savestring (command_line), fork_flags);
+@@ -6453,8 +6476,8 @@ fast_spawn_command (char *command, WORD_LIST *words,
+      fork()+exec() path.  Useful to verify whether an issue is caused
+      by the fast path. */
+   if (nofastspawn_set)
+-    return (pid_t)-1;
++    return FAST_SPAWN_DECLINE;
+   /* No fast-path implementation yet.  Decline. */
+-  return (pid_t)-1;
++  return FAST_SPAWN_DECLINE;
+ }
+ #endif /* __CYGWIN__ */
+-- 
+2.54.0.windows.1
+

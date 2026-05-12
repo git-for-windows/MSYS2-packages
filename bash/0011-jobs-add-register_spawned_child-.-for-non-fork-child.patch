@@ -1,0 +1,120 @@
+From dd4c2b321ba14c30b43366f1601fb16a473bedb4 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 5 May 2026 10:17:33 +0200
+Subject: [PATCH 11/N] jobs: add `register_spawned_child(...)` for non-fork
+ child registration
+
+`make_child(...)` interleaves two responsibilities: it `fork(...)`s and
+then, on the parent side, registers the new child with bash's job
+tables (`setpgid(...)`, `add_process(...)`, `last_made_pid`, the
+asynchronous-jobs list, the per-PID bookkeeping counters). On Cygwin /
+MSYS2 the upcoming spawnve-based fast path in `execute_disk_command(...)`
+needs the registration half without the fork half, because the child
+process already exists (`spawnve(...)` returned its pid) by the time
+the registration would otherwise run.
+
+Extracting that registration half from `make_child(...)` cleanly is not
+practical: the parent-side bookkeeping is tightly interleaved with
+post-`fork(...)` cleanup, signal-handler state, and child-side
+branches. A clean refactor would touch every caller. Instead introduce
+a separate entry point `register_spawned_child(...)` that recapitulates
+the parent-side bookkeeping for an already-spawned pid.
+
+The helper assumes the caller has already arranged the appropriate
+signal blocking around the spawn and the child startup; it performs
+the `setpgid(...)`, `add_process(...)`, `last_made_pid` update and the
+job-table dance that the parent branch of `make_child(...)` does, and
+nothing else.
+
+Guarded by `__CYGWIN__` since this exists solely to support the
+`spawnve(...)` path. On other platforms `make_child(...)` remains the
+only entry point and this code would be dead weight. The guard is also
+forward-looking: there are no plans to upstream the fast path to GNU
+Bash, which targets POSIX systems where `fork(...)` is cheap.
+
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ jobs.c | 52 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ jobs.h |  3 +++
+ 2 files changed, 55 insertions(+)
+
+diff --git a/jobs.c b/jobs.c
+index 528c90f..a2465b1 100644
+--- a/jobs.c
++++ b/jobs.c
+@@ -2501,6 +2501,58 @@ make_child (char *command, int flags)
+   return (pid);
+ }
+ 
++#ifdef __CYGWIN__
++/* Register a child created by spawnv() (or any non-fork mechanism) in
++   the job table.  This mirrors the parent-side bookkeeping of
++   make_child(), but assumes the caller has already arranged signal
++   blocking around the spawn and the child's process startup.
++   Returns PID. */
++pid_t
++register_spawned_child (pid_t pid, char *command, int flags)
++{
++  PROCESS *child;
++  int async_p;
++
++  async_p = (flags & FORK_ASYNC);
++
++  if (job_control)
++    {
++      if (pipeline_pgrp == 0)
++	pipeline_pgrp = pid;
++      if ((flags & FORK_NOJOB) == 0 && setpgid (pid, pipeline_pgrp) < 0)
++        sys_error (_("child setpgid (%ld to %ld)"), (long)pid, (long)pipeline_pgrp);
++    }
++  else if (pipeline_pgrp == 0)
++    pipeline_pgrp = shell_pgrp;
++
++  /* Place all processes into the jobs array regardless of the
++     state of job_control. */
++  child = add_process (command, pid);
++
++  if (flags & FORK_PROCSUB)
++    child->flags |= PROC_PROCSUB;
++  if (flags & FORK_COMSUB)
++    child->flags |= PROC_COMSUB;
++
++  if (async_p)
++    last_asynchronous_pid = pid;
++#if defined (RECYCLES_PIDS)
++  else if (last_asynchronous_pid == pid)
++    last_asynchronous_pid = 1;
++#endif
++
++  delete_old_job (pid);
++  bgp_delete (pid);
++
++  last_made_pid = pid;
++
++  js.c_totforked++;
++  js.c_living++;
++
++  return pid;
++}
++#endif /* __CYGWIN__ */
++
+ /* These two functions are called only in child processes. */
+ void
+ ignore_tty_job_signals (void)
+diff --git a/jobs.h b/jobs.h
+index 64509e2..7b99881 100644
+--- a/jobs.h
++++ b/jobs.h
+@@ -295,6 +295,9 @@ extern void list_stopped_jobs (int);
+ extern void list_running_jobs (int);
+ 
+ extern pid_t make_child (char *, int);
++#ifdef __CYGWIN__
++extern pid_t register_spawned_child (pid_t, char *, int);
++#endif
+ 
+ extern int get_tty_state (void);
+ extern int set_tty_state (void);
+-- 
+2.54.0.windows.1
+

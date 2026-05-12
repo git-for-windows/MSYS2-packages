@@ -1,0 +1,273 @@
+From 8f6bc42ccee15b0d40cf308a57254592d39cdacb Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 28 May 2026 11:11:06 +0200
+Subject: [PATCH 10/N] tests: import the GNU coreutils expr test suite
+
+While the main reason to implement a built-in `expr` in Bash is to
+accelerate Git's test suite, the built-in will be exposed to Git for
+Windows' users via the Git Bash. They will expect it to behave just like
+`/usr/bin/expr.exe` behaved, i.e. GNU semantics, not just POSIX ones.
+The intention of this commit is not only to demonstrate _almost_ feature
+parity with `/usr/bin/expr.exe` (i.e. the GNU coreutils variant), but
+also to document the gaps. Users who require the GNU `expr` behavior
+instead of the built-in `expr` one will need to work around this by
+disabling the built-in: `enable -n expr`.
+
+This commit adds `tests/expr-coreutils.tests`, a standalone Bash script
+with 96 test cases ported from the GNU coreutils `expr.pl` test
+definition (see the coreutils source under `tests/expr/expr.pl`). It
+exercises arithmetic, option handling, parenthesised subexpressions,
+string and integer edge cases, short-circuit evaluation, the three-way
+semantics of `|` with empty operands, anchored and newline-bearing regex
+matches, empty subexpression matches, BRE corner cases lifted from
+grep's `bre.tests`, and several error-only diagnostics.
+
+Tests fall into two categories. The `t(...)` helper checks both exit
+status and stdout. The `te(...)` helper only checks exit status, used
+for error cases where the exact diagnostic wording is
+implementation-defined and should not be pinned down. All 96 tests
+pass when `expr` resolves to `/usr/bin/expr` (GNU coreutils).
+
+Nine of those tests are marked as known expected failures
+(`KNOWN_XFAIL`) when run against the Bash builtin: `bre17`, `bre19`,
+`bre35`, `bre38`, `bre45`, `bre46`, `bre58`, `bre59`, `bre60`. They
+all probe BRE constructs that POSIX either does not specify or
+explicitly leaves undefined. None of the nine exercises behaviour
+that POSIX requires of a conforming `expr`.
+
+Concretely, the `bre45` and `bre46` patterns `a\{,2\}` and `a\{,\}`
+use the `\{,n\}` form, which is a GNU extension. POSIX (IEEE Std
+1003.1-2017, Base Definitions section 9.3.6 item 5,
+https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html)
+only defines `\{m\}`, `\{m,\}`, and `\{m,n\}`, where `m` and `n` are
+decimal integers; the leading `m` is mandatory. The `bre58`, `bre59`
+and `bre60` patterns `a\{1\}\{1\}`, `a*\{1\}` and `a\{1\}*` chain
+duplication operators back to back. POSIX 9.3.6 ends with the explicit
+sentence "The behavior of multiple adjacent duplication symbols (`*`
+and intervals) produces undefined results." The `bre17` and `bre19`
+patterns `\(\{1\}a\)` and `^\{1\}` apply `\{` with no preceding atom,
+which is again outside the POSIX grammar in 9.3.6 item 5 (an interval
+expression follows a BRE matching a single character, a subexpression,
+or a back-reference). The `bre35` and `bre38` patterns `a\(***\)b`
+and `***a` chain two or more `*` characters; POSIX 9.3.3 makes `*`
+special only after the first non-`^` atom, and the second and third
+`*` characters in `***` fall under the same "multiple adjacent
+duplication symbols" undefined-results clause as above.
+
+The builtin uses the MSYS2 runtime's BSD/Henry Spencer regex engine
+via `regcomp(3)` with `cflags == 0` (POSIX BRE). That engine
+hard-codes `REG_BADRPT` or `REG_BADBR` for each of the constructs
+above, which is one of the outcomes POSIX permits for undefined
+behaviour. GNU coreutils on the other hand links a bundled gnulib
+regex engine and calls `re_compile_pattern(...)` with the syntax mask
+`(RE_SYNTAX_POSIX_BASIC & ~RE_CONTEXT_INVALID_DUP & ~RE_NO_EMPTY_RANGES)`,
+which deliberately accepts these GNU extensions. Making the builtin
+match coreutils on the nine xfails would therefore require bundling
+the gnulib regex sources, not just a different `regcomp(3)` flag,
+and the patterns in question are POSIX-undefined to begin with. The
+xfail mechanism records them so the test script still exits cleanly
+while documenting the divergence.
+
+Run the suite with
+
+    cd tests
+    export PATH=/usr/bin:$PATH
+    ../bash.exe ./expr-coreutils.tests
+
+against the builtin, or substitute `/usr/bin/bash` for `../bash.exe`
+to run it against `/usr/bin/expr`.
+
+Note that this new script deviates from the existing `tests/run-*`
+scripts intentionally, to stay as close to the original tests in GNU
+coreutils as possible (to make validation or future synchronization
+easier).
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ tests/run-expr-coreutils | 173 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 173 insertions(+)
+ create mode 100755 tests/run-expr-coreutils
+
+diff --git a/tests/run-expr-coreutils b/tests/run-expr-coreutils
+new file mode 100755
+index 0000000..f9ebad8
+--- /dev/null
++++ b/tests/run-expr-coreutils
+@@ -0,0 +1,173 @@
++#!/bin/bash
++# Test cases extracted from GNU coreutils tests/expr/expr.pl
++# Adapted to run against the bash builtin or /usr/bin/expr.
++#
++# Each test: t NAME expected_exit expected_stdout ARGS...
++# For error-only tests (no stdout check): te NAME expected_exit ARGS...
++
++PASS=0 FAIL=0 XFAIL=0
++
++# Tests that fail because the builtin uses POSIX regcomp() which rejects
++# certain GNU BRE extensions (repeated intervals, \{,N\}, leading ***).
++# These pass with /usr/bin/expr (GNU coreutils) but not with the builtin.
++declare -A KNOWN_XFAIL=(
++  [bre17]=1 [bre19]=1 [bre35]=1 [bre38]=1 [bre45]=1
++  [bre46]=1 [bre58]=1 [bre59]=1 [bre60]=1
++)
++
++t () {
++  local name=$1 xexit=$2 xout=$3; shift 3
++  local out rc
++  out=$(expr "$@" 2>/dev/null); rc=$?
++  if [[ $rc -ne $xexit || "$out" != "$xout" ]]; then
++    if [[ ${KNOWN_XFAIL[$name]+set} ]]; then
++      ((XFAIL++)); return
++    fi
++    if [[ $rc -ne $xexit ]]; then
++      echo "FAIL $name: exit $rc (expected $xexit)"
++    else
++      echo "FAIL $name: out='$out' (expected '$xout')"
++    fi
++    ((FAIL++)); return
++  fi
++  ((PASS++))
++}
++
++# error tests: check exit code only, ignore exact diagnostic wording
++te () {
++  local name=$1 xexit=$2; shift 2
++  local rc
++  expr "$@" >/dev/null 2>&1; rc=$?
++  if [[ $rc -ne $xexit ]]; then
++    if [[ ${KNOWN_XFAIL[$name]+set} ]]; then
++      ((XFAIL++)); return
++    fi
++    echo "FAIL $name: exit $rc (expected $xexit)"
++    ((FAIL++)); return
++  fi
++  ((PASS++))
++}
++
++echo "=== Arithmetic ==="
++t a   0 11  5 + 6
++t b   0 -1  5 - 6
++t c   0 30  5 '*' 6
++t d   0 16  100 / 6
++t e   0 4   100 % 6
++t f   0 1   3 + -2
++t g   0 -4  -2 + -2
++
++echo "=== Option handling (--) ==="
++t opt1 0 1   -- -11 + 12
++t opt2 0 1   -11 + 12
++t opt3 0 1   -- -1 + 2
++t opt4 0 1   -1 + 2
++t opt5 0 4   -- 2 + 2
++
++echo "=== Parentheses ==="
++t paren1 0 4   '(' 100 % 6 ')'
++t paren2 0 -4  '(' 100 % 6 ')' - 8
++t paren3 0 -6  9 / '(' 100 % 6 ')' - 8
++t paren4 0 -2  9 / '(' '(' 100 % 6 ')' - 8 ')'
++t paren5 0 13  9 + '(' 100 % 6 ')'
++
++echo "=== String/integer edge cases ==="
++t 0bang  1 0   00 '<' '0!'
++t 00     1 00  00
++t minus0 1 -0  -0
++
++echo "=== Short-circuit evaluation ==="
++t andand    1 0  0 '&' 1 / 0
++t oror      0 1  1 '|' 1 / 0
++t or-paren  0 1  1 '|' '(' 1 / 0 ')'
++t and-paren 1 0  0 '&' '(' 1 / 0 ')'
++t or-nested  0 1  1 '|' '(' 0 '&' '(' 1 / 0 ')' ')'
++t and-nested 1 0  0 '&' '(' 1 '|' '(' 1 / 0 ')' ')'
++
++echo "=== Or with empty strings ==="
++t orempty 1 0  "" '|' ""
++
++echo "=== Anchor/newline in regex ==="
++# 'a\nb' : 'a$' should NOT match (anchors do not match embedded newlines)
++t anchor 1 0  "$(printf 'a\nb')" : 'a$'
++
++echo "=== Empty subexpression match ==="
++t emptysub 1 ""  a : '\(b\)*'
++
++echo "=== BRE tests (from grep/tests/bre.tests) ==="
++t bre1  0 b     abc : 'a\(b\)c'
++t bre2  0 2     'a(' : 'a('
++te bre3 2       _ : 'a\('
++te bre4 2       _ : 'a\(b'
++t bre5  0 3     'a(b' : 'a(b'
++t bre6  0 2     'a)' : 'a)'
++te bre7 2       _ : 'a\)'
++te bre8 2       _ : '\)'
++t bre9  1 ""    ab : 'a\(\)b'
++t bre10 0 3     'a^b' : 'a^b'
++t bre11 0 3     'a$b' : 'a$b'
++t bre12 1 ""    "" : '\($\)\(^\)'
++t bre13 0 b     b : 'a*\(^b$\)c*'
++# bre14 and bre15 test multi-expression chaining - skip, non-standard
++t bre16 1 ""    abc : '\(\)'
++t bre17 0 '{1}a' '{1}a' : '\(\{1\}a\)'
++# bre18 tests multi-expression chaining - skip
++t bre19 0 3     '{1}' : '^\{1\}'
++t bre20 0 1     '{' : '{'
++t bre21 1 ""    abbcbd : 'a\(b*\)c\1d'
++t bre22 1 ""    abbcbbbd : 'a\(b*\)c\1d'
++t bre23 1 ""    abc : '\(.\)\1'
++t bre24 0 cc    abbccd : 'a\(\([bc]\)\2\)*d'
++t bre25 1 ""    abbcbd : 'a\(\([bc]\)\2\)*d'
++t bre26 0 bbb   abbbd : 'a\(\(b\)*\2\)*d'
++t bre27 0 a     aabcd : '\(a\)\1bcd'
++t bre28 0 a     aabcd : '\(a\)\1bc*d'
++t bre29 0 a     aabd : '\(a\)\1bc*d'
++t bre30 0 a     aabcccd : '\(a\)\1bc*d'
++t bre31 0 a     aabcccd : '\(a\)\1bc*[ce]d'
++t bre32 0 a     aabcccd : '\(a\)\1b\(c\)*cd$'
++t bre33 0 '*'   'a*b' : 'a\(*\)b'
++t bre34 1 ""    ab : 'a\(**\)b'
++t bre35 1 ""    ab : 'a\(***\)b'
++t bre36 0 2     '*a' : '*a'
++t bre37 0 1     a : '**a'
++t bre38 0 1     a : '***a'
++t bre39 0 2     ab : 'a\{1\}b'
++t bre40 0 2     ab : 'a\{1,\}b'
++t bre41 0 3     aab : 'a\{1,2\}b'
++te bre42 2      _ : 'a\{1'
++te bre43 2      _ : 'a\{1a'
++te bre44 2      _ : 'a\{1a\}'
++t bre45 0 1     a : 'a\{,2\}'
++t bre46 0 1     a : 'a\{,\}'
++te bre47 2      _ : 'a\{1,x\}'
++te bre48 2      _ : 'a\{1,x'
++# bre49: {32768} - implementation-defined overflow
++te bre50 2      _ : 'a\{1,0\}'
++t bre51 0 2     acabc : '.*ab\{0,0\}c'
++t bre52 0 3     abcac : 'ab\{0,1\}c'
++t bre53 0 4     abbcac : 'ab\{0,3\}c'
++t bre54 0 3     abcac : '.*ab\{1,1\}c'
++t bre55 0 3     abcac : '.*ab\{1,3\}c'
++t bre56 0 4     abbcabc : '.*ab\{2,2\}c'
++t bre57 0 4     abbcabc : '.*ab\{2,4\}c'
++t bre58 0 1     aa : 'a\{1\}\{1\}'
++t bre59 0 2     aa : 'a*\{1\}'
++t bre60 0 2     aa : 'a\{1\}*'
++t bre61 1 ""    acd : 'a\(b\)?c\1d'
++t bre62 0 2     -- -5 : '-\{0,1\}[0-9]*$'
++
++echo "=== Error cases ==="
++te fail-a 2    3 + -
++te fail-c 2
++te se0    2    9 9
++te se1    2    2 a
++te se2    2    2 '+'
++te se3    2    2 :
++te se4    2    length
++te se5    2    '(' 2
++te se6    2    '(' 2 a
++
++echo ""
++echo "Total: $((PASS+FAIL+XFAIL)) tests, $PASS passed, $FAIL failed, $XFAIL xfail (known)"
++[[ $FAIL -eq 0 ]]
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,98 @@
+From 475bad401b5a4a1af22aa086867c25521911cad1 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 11 May 2026 21:02:38 +0200
+Subject: [PATCH 26/N] execute_cmd: skip fast-spawn path when unable to
+ replicate child-side setup
+
+The spawnve fast path has no between-fork-and-exec window where
+child-side setup code can run. Two categories of such setup exist in the
+regular fork+exec path that the fast path cannot replicate.
+
+For background commands in interactive shells, the post-fork child runs
+`setup_async_signals(...)` to make the background job ignore `SIGINT`
+and `SIGQUIT` (so Ctrl-C does not kill it), and
+`async_redirect_stdin(...)` to redirect fd 0 from `/dev/null` (so the
+background job does not steal the terminal's input).
+`setup_async_signals(...)` could be approximated by wrapping
+`spawnve(...)` with temporary `SIG_IGN` in the parent, but that opens a
+window where signals delivered to the parent are silently lost.
+`async_redirect_stdin(...)` could be approximated with a save /
+`dup2(...)` / restore around fd 0, but it changes parent behavior in
+subtle ways. Both deserve their own follow-up commits.
+
+For foreground commands under job control, the post-fork child runs
+`setpgid(mypid, pipeline_pgrp)` and `give_terminal_to(pipeline_pgrp, 0)`
+(`jobs.c:2390`, `:2400`).  `register_spawned_child(...)` attempts the
+`setpgid(...)` from the parent side after `spawnve(...)` has already
+returned, but this races with the child's cygwin process-record
+initialization: the child's `getpgid(0)` reports the new pgid while
+`kill(-pgid, ...)` against the same id returns `ESRCH`, because cygwin's
+pgrp-by-id index has not been updated atomically. Any spawned program
+that calls `initialize_job_control(...)` (another `bash -i`, the shell
+tmux places in window 0, etc.) then loops 16 times on `kill(0, SIGTTIN)`
+getting `ESRCH` and falls back to "no job control in background",
+leaving the child unable to manage its terminal. The structurally
+correct fix is `posix_spawn(...)` with `POSIX_SPAWN_SETPGROUP`, which
+sets the child's pgid atomically as part of the spawn syscall, but
+msys2-runtime does not yet expose a usable `posix_spawn(...)`.
+
+Bail out of the fast path for both cases: when `async &&
+interactive_shell`, and when `!async && job_control`.  Non-interactive
+shells (the Git for Windows test suite path) have `job_control == 0` and
+do not background commands interactively, so they keep the fast path
+with the full 2x+ speedup. The only commands that lose the fast path are
+those typed at an interactive prompt, where the per-command fork
+overhead is in the low-millisecond range and imperceptible against the
+actual work the command does.
+
+Assisted-by: Opus 4.6
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 0e8cd9b..b32c7f6 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6770,6 +6770,37 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   /* Conditions we don't yet handle.  Bail out and let make_child do it. */
+   if (cmdflags & CMD_NO_FORK)
+     return FAST_SPAWN_DECLINE;
++  if (async && interactive_shell)
++    /* In interactive shells, the regular fork path runs
++       setup_async_signals() in the post-fork child to make the
++       background job ignore SIGINT and SIGQUIT, and (when
++       CMD_STDIN_REDIR is set and stdin is not explicitly redirected)
++       redirects stdin to /dev/null so the background job does not
++       compete for the terminal's input.  Cygwin's spawnve gives us
++       no between-fork-and-exec hook to replicate either effect.  In
++       non-interactive shells (the test-suite path) those effects do
++       not matter, so we keep the fast path enabled there. */
++    return FAST_SPAWN_DECLINE;
++  if (!async && job_control)
++    /* For foreground commands the regular fork path's child runs
++       setpgid(mypid, pipeline_pgrp) and, when the new pgrp differs
++       from shell_pgrp, give_terminal_to(pipeline_pgrp, 0) between
++       fork and exec (jobs.c:2390, 2400).  register_spawned_child's
++       parent-side setpgid races with the child's cygwin process
++       record initialization: when the child reaches the spawned
++       program's main() before the parent's setpgid has fully
++       updated the cygwin pgrp index, getpgid() reports the new
++       pgid but kill(-pgid, ...) returns ESRCH against it, breaking
++       any spawned program that runs initialize_job_control (bash
++       -i, tmux's default-shell window, etc.).  No spawn-side fix
++       inside this fast path can close that race without a child-
++       side hook; the structurally correct fix is posix_spawn with
++       POSIX_SPAWN_SETPGROUP, which sets the child's pgid atomically
++       as part of the spawn syscall, but msys2-runtime does not yet
++       expose a usable posix_spawn.  Until then, bail out for this
++       case.  Non-interactive shells have job_control == 0 and stay
++       on the fast path; the GfW test suite is unaffected. */
++    return FAST_SPAWN_DECLINE;
+   if (redirects && !fast_spawn_redirect_supported (redirects))
+     return FAST_SPAWN_DECLINE;
+ 
+-- 
+2.54.0.windows.1
+

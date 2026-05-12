@@ -1,0 +1,785 @@
+From b9cb8b515755c5f5457cc7dd8b17f8c59c12c91b Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 6 May 2026 02:51:55 +0200
+Subject: [PATCH 08/N] builtins: implement expr
+
+Like many other POSIX utilities, Git's tests use `expr`
+(https://pubs.opengroup.org/onlinepubs/9699919799/utilities/expr.html)
+extensively. For example, `test-lib-functions.sh`
+(https://github.com/git/git/blob/master/t/test-lib-functions.sh) runs
+`expr(...)` once per `test_have_prereq(...)` invocation (i.e. roughly
+once per `test_expect_*`) just to validate that the prereq string
+contains only the allowed alphabet, and uses `expr STR : REGEX` for
+various parsing tasks throughout. Each invocation is an external
+`fork(...)` + `exec(...)` of `/usr/bin/expr.exe`, which the MSYS2
+runtime must emulate at a cost of around 14ms even with the upcoming
+`spawnve(...)` fast path (and around double that without that fast
+path). Making `expr` a builtin eliminates the spawn entirely, dropping
+each call to microseconds.
+
+The implementation is a from-scratch recursive-descent evaluator over
+the `argv` variable of type `WORD_LIST` (each operator and operand is
+its own argument, per POSIX). The grammar has seven precedence levels:
+
+  | & {<,<=,=,==,!=,>=,>} {+,-} {*,/,%} : (...)
+
+plus the four named operations `length`, `substr`, `index` and `match`.
+Comparison is numeric when both operands parse as integers and lexical
+otherwise, matching POSIX and the GNU expr behavior that Git relies on
+(e.g. `expr 2.34 \<= "$_GLIBC_VERSION"` falls back to string compare).
+The `:` operator is a BRE match anchored at the start of the left
+operand; if the pattern contains a `\(...\)` capture group, the matched
+substring is returned, otherwise the length of the matched prefix.
+
+Errors are signalled via a `setjmp(...)` / `longjmp(...)` out of the
+recursive descent so that deep parses do not have to thread error
+returns through every level. The exit status follows GNU expr (which
+POSIX permits) conventions: 0 if the result is non-zero/non-empty, 1
+if zero/empty, and 2 for any error (syntax error, division by zero,
+regex compile failure).
+
+A note on disambiguation: per POSIX, `length`, `substr`, `index` and
+`match` are keywords only by position, not absolutely; a user's
+`expr length` where `length` is itself the value being measured is
+supposed to be disambiguated with the GNU `+` quoter. This builtin
+takes the keyword interpretation whenever the remaining `argv` has
+the right shape; that is good enough for every use of `expr` in Git's
+test suite and matches what GNU expr does in practice for the unquoted
+case.
+
+The `.def` boilerplate follows the `let.def` template closely: a plain
+`WORD_LIST` to `int` builtin with `CHECK_HELPOPT` and the standard
+`--` leading-separator skip. `builtins/Makefile.in` gets the new
+`.def` added to `DEFSRC`, `expr.o` added to `OFILES`, and a header-dep
+stanza copied from `let.o`.
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ builtins/Makefile.in |  15 +-
+ builtins/expr.def    | 659 +++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 672 insertions(+), 2 deletions(-)
+ create mode 100644 builtins/expr.def
+
+diff --git a/builtins/Makefile.in b/builtins/Makefile.in
+index 7e0ec32..9e28d36 100644
+--- a/builtins/Makefile.in
++++ b/builtins/Makefile.in
+@@ -152,7 +152,8 @@ DEFSRC =  $(srcdir)/alias.def $(srcdir)/bind.def $(srcdir)/break.def \
+ 	  $(srcdir)/times.def $(srcdir)/trap.def $(srcdir)/type.def \
+ 	  $(srcdir)/ulimit.def $(srcdir)/umask.def $(srcdir)/wait.def \
+ 	  $(srcdir)/reserved.def $(srcdir)/pushd.def $(srcdir)/shopt.def \
+-	  $(srcdir)/printf.def $(srcdir)/complete.def $(srcdir)/mapfile.def
++	  $(srcdir)/printf.def $(srcdir)/complete.def $(srcdir)/mapfile.def \
++	  $(srcdir)/expr.def
+ 
+ STATIC_SOURCE = common.c evalstring.c evalfile.c getopt.c bashgetopt.c \
+ 		getopt.h 
+@@ -164,7 +165,8 @@ OFILES = builtins.o \
+ 	jobs.o kill.o let.o mapfile.o \
+ 	pushd.o read.o return.o set.o setattr.o shift.o source.o \
+ 	suspend.o test.o times.o trap.o type.o ulimit.o umask.o \
+-	wait.o getopts.o shopt.o printf.o getopt.o bashgetopt.o complete.o
++	wait.o getopts.o shopt.o printf.o getopt.o bashgetopt.o complete.o \
++	expr.o
+ 
+ CREATED_FILES = builtext.h builtins.c psize.aux pipesize.h tmpbuiltins.c \
+ 	tmpbuiltins.h
+@@ -333,6 +335,7 @@ wait.o: wait.def
+ getopts.o: getopts.def
+ reserved.o: reserved.def
+ complete.o: complete.def
++expr.o: expr.def
+ 
+ # C files
+ bashgetopt.o: ../config.h $(topdir)/bashansi.h $(BASHINCDIR)/ansi_stdlib.h
+@@ -557,6 +560,13 @@ let.o: $(topdir)/subst.h $(topdir)/externs.h $(BASHINCDIR)/maxpath.h
+ let.o: $(topdir)/shell.h $(topdir)/syntax.h $(topdir)/unwind_prot.h $(topdir)/variables.h $(topdir)/conftypes.h
+ let.o: ../pathnames.h
+ let.o: $(BASHINCDIR)/unlocked-io.h
++expr.o: $(topdir)/command.h ../config.h $(BASHINCDIR)/memalloc.h
++expr.o: $(topdir)/error.h $(topdir)/general.h $(topdir)/xmalloc.h
++expr.o: $(topdir)/quit.h $(topdir)/dispose_cmd.h $(topdir)/make_cmd.h $(topdir)/sig.h
++expr.o: $(topdir)/subst.h $(topdir)/externs.h $(BASHINCDIR)/maxpath.h
++expr.o: $(topdir)/shell.h $(topdir)/syntax.h $(topdir)/unwind_prot.h $(topdir)/variables.h $(topdir)/conftypes.h
++expr.o: ../pathnames.h
++expr.o: $(BASHINCDIR)/unlocked-io.h
+ printf.o: ../config.h $(BASHINCDIR)/memalloc.h $(topdir)/bashjmp.h
+ printf.o: $(topdir)/command.h $(topdir)/error.h $(topdir)/general.h $(topdir)/xmalloc.h
+ printf.o: $(topdir)/quit.h $(topdir)/dispose_cmd.h $(topdir)/make_cmd.h
+@@ -746,6 +756,7 @@ inlib.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
+ jobs.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
+ kill.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
+ let.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
++expr.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
+ mapfile.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
+ mkbuiltins.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
+ printf.o: ${topdir}/bashintl.h ${LIBINTL_H} $(BASHINCDIR)/gettext.h
+diff --git a/builtins/expr.def b/builtins/expr.def
+new file mode 100644
+index 0000000..b245bf9
+--- /dev/null
++++ b/builtins/expr.def
+@@ -0,0 +1,659 @@
++This file is expr.def, from which is created expr.c.
++It implements the builtin "expr" in Bash.
++
++Copyright (C) 2026 Free Software Foundation, Inc.
++
++This file is part of GNU Bash, the Bourne Again SHell.
++
++Bash is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
++(at your option) any later version.
++
++Bash is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++GNU General Public License for more details.
++
++You should have received a copy of the GNU General Public License
++along with Bash. If not, see <http://www.gnu.org/licenses/>.
++
++$PRODUCES expr.c
++
++$BUILTIN expr
++$FUNCTION expr_builtin
++$SHORT_DOC expr EXPRESSION
++Evaluate an expression and write the result to standard output.
++
++EXPRESSION is composed of operators (in order of increasing precedence):
++
++	EXPR1 | EXPR2	EXPR1 if non-null and non-zero, else EXPR2
++	EXPR1 & EXPR2	EXPR1 if both non-null and non-zero, else 0
++	EXPR1 RELOP EXPR2  comparison: <, <=, =, !=, >=, >
++			(numeric if both operands are integers, else
++			 lexical)
++	EXPR1 +/- EXPR2	arithmetic
++	EXPR1 *,/,% EXPR2	arithmetic
++	STR : REGEX	BRE match, anchored at start of STR; result is
++			the first \( \) group, or the length of the
++			match if there is no group
++	( EXPR )	grouping
++
++	length STR	character length of STR
++	substr STR POS LEN	substring of STR starting at POS (1-based),
++			at most LEN characters
++	index STR CHARS	first 1-based position in STR of any character
++			in CHARS, or 0
++	match STR REGEX	same as STR : REGEX
++
++Each operator and operand must be a separate argument.
++
++Exit Status:
++0 if EXPR is non-null and non-zero, 1 if EXPR is null or zero, 2 on
++invalid expression, 3 on internal error.
++$END
++
++#include <config.h>
++
++#if defined (HAVE_UNISTD_H)
++#  include <unistd.h>
++#endif
++
++#include <stdio.h>
++#include <ctype.h>
++#include <errno.h>
++#include <setjmp.h>
++#include <regex.h>
++
++#if defined (HAVE_INTTYPES_H)
++#  include <inttypes.h>
++#endif
++
++#include "../bashansi.h"
++#include "../bashintl.h"
++
++#include "../shell.h"
++#include "common.h"
++#include "bashgetopt.h"
++
++#define EXPR_INVALID	2
++#define EXPR_ERROR	3
++
++/* A value is either a string, a number, or both (when a string also
++   parses as a valid integer). STR is always non-NULL and freshly
++   allocated; the caller takes ownership when consuming a value. */
++struct val
++{
++  char *str;
++  intmax_t num;
++  int have_num;
++};
++
++/* Parser state. TOK points at the next argv slot to consume; END is
++   one past the last. ERR_JMP is used to bail out of arbitrarily
++   deep recursion on a syntax error. */
++struct parser
++{
++  WORD_LIST *tok;
++  jmp_buf err_jmp;
++  int err_status;
++};
++
++static struct val *parse_or (struct parser *, int);
++
++/* True if S is a valid (possibly signed) decimal integer with no
++   trailing garbage. */
++static int
++expr_is_integer (const char *s, intmax_t *np)
++{
++  const char *p = s;
++  if (*p == '-')
++    p++;
++  if (!*p)
++    return 0;
++  while (isdigit ((unsigned char)*p))
++    p++;
++  if (*p)
++    return 0;
++  return legal_number (s, np);
++}
++
++static struct val *
++val_str (char *s)
++{
++  struct val *v = (struct val *)xmalloc (sizeof *v);
++  v->str = s;
++  v->have_num = expr_is_integer (s, &v->num);
++  return v;
++}
++
++static struct val *
++val_num (intmax_t n)
++{
++  struct val *v = (struct val *)xmalloc (sizeof *v);
++  v->str = itos (n);
++  v->num = n;
++  v->have_num = 1;
++  return v;
++}
++
++static struct val *
++val_dup_str (const char *s)
++{
++  return val_str (savestring (s));
++}
++
++static void
++val_free (struct val *v)
++{
++  if (!v)
++    return;
++  free (v->str);
++  free (v);
++}
++
++static int
++val_truthy (struct val *v)
++{
++  if (v->have_num)
++    return v->num != 0;
++  return v->str[0] != '\0';
++}
++
++static intmax_t
++val_to_num (struct parser *p, struct val *v)
++{
++  if (!v->have_num)
++    {
++      builtin_error (_("non-integer argument: %s"), v->str);
++      p->err_status = EXPR_INVALID;
++      longjmp (p->err_jmp, 1);
++    }
++  return v->num;
++}
++
++/* Token classification. POSIX makes argv positions, not contents,
++   the disambiguator: any TOKEN may also be a string operand. We
++   recognize an operator only at positions where the grammar expects
++   one (i.e. as the second argv after a primary). */
++
++static const char *
++peek (struct parser *p)
++{
++  return p->tok ? p->tok->word->word : NULL;
++}
++
++static char *
++consume (struct parser *p)
++{
++  char *s;
++  if (!p->tok)
++    {
++      builtin_error (_("syntax error: unexpected end of expression"));
++      p->err_status = EXPR_INVALID;
++      longjmp (p->err_jmp, 1);
++    }
++  s = p->tok->word->word;
++  p->tok = p->tok->next;
++  return s;
++}
++
++static int
++match_op (struct parser *p, const char *op)
++{
++  const char *t = peek (p);
++  if (t && strcmp (t, op) == 0)
++    {
++      consume (p);
++      return 1;
++    }
++  return 0;
++}
++
++/* The `:` operator and `match`. Anchor PATTERN at start of STR; if
++   PATTERN contains a \( \) group, return the matched substring;
++   otherwise return the length of the matched prefix as a number.
++   No match returns "" (no group) or 0 (group). */
++static struct val *
++expr_match (struct parser *p, struct val *l, struct val *r)
++{
++  regex_t re;
++  regmatch_t pm[2];
++  int rc;
++  struct val *out;
++  /* POSIX BRE, anchored: prefix the pattern with ^ if it is not
++     already anchored, since `:` is left-anchored by definition. */
++  char *anchored;
++  size_t plen = strlen (r->str);
++  int has_group;
++
++  anchored = (char *)xmalloc (plen + 2);
++  if (r->str[0] == '^')
++    memcpy (anchored, r->str, plen + 1);
++  else
++    {
++      anchored[0] = '^';
++      memcpy (anchored + 1, r->str, plen + 1);
++    }
++
++  rc = regcomp (&re, anchored, 0 /* BRE */);
++  if (rc != 0)
++    {
++      char errbuf[256];
++      regerror (rc, &re, errbuf, sizeof errbuf);
++      regfree (&re);
++      free (anchored);
++      builtin_error (_("invalid regular expression: %s"), errbuf);
++      p->err_status = EXPR_INVALID;
++      longjmp (p->err_jmp, 1);
++    }
++  free (anchored);
++
++  has_group = re.re_nsub >= 1;
++  rc = regexec (&re, l->str, has_group ? 2 : 1, pm, 0);
++
++  if (rc != 0 || pm[0].rm_so != 0)
++    {
++      regfree (&re);
++      return has_group ? val_dup_str ("") : val_num (0);
++    }
++
++  if (has_group && pm[1].rm_so >= 0)
++    {
++      size_t glen = pm[1].rm_eo - pm[1].rm_so;
++      char *g = (char *)xmalloc (glen + 1);
++      memcpy (g, l->str + pm[1].rm_so, glen);
++      g[glen] = '\0';
++      regfree (&re);
++      out = val_str (g);
++    }
++  else if (has_group)
++    {
++      regfree (&re);
++      out = val_dup_str ("");
++    }
++  else
++    {
++      out = val_num (pm[0].rm_eo);
++      regfree (&re);
++    }
++  return out;
++}
++
++/* primary ::= '(' or ')' | named_op | TOKEN */
++static struct val *
++parse_primary (struct parser *p, int evaluate)
++{
++  const char *t = peek (p);
++  struct val *v, *a, *b, *c;
++
++  if (!t)
++    {
++      builtin_error (_("syntax error: unexpected end of expression"));
++      p->err_status = EXPR_INVALID;
++      longjmp (p->err_jmp, 1);
++    }
++
++  if (strcmp (t, "(") == 0)
++    {
++      consume (p);
++      v = parse_or (p, evaluate);
++      if (!match_op (p, ")"))
++	{
++	  val_free (v);
++	  builtin_error (_("syntax error: missing `)`"));
++	  p->err_status = EXPR_INVALID;
++	  longjmp (p->err_jmp, 1);
++	}
++      return v;
++    }
++
++  /* Named operations. Per POSIX they only act as keywords if the
++     remaining argv has the right shape; otherwise we treat them as
++     plain string operands. We approximate by always taking them as
++     keywords when the following tokens exist and are not closing
++     delimiters. */
++  if (strcmp (t, "length") == 0 && p->tok->next != NULL)
++    {
++      consume (p);
++      a = parse_primary (p, evaluate);
++      if (evaluate)
++	v = val_num ((intmax_t)strlen (a->str));
++      else
++	v = val_num (0);
++      val_free (a);
++      return v;
++    }
++  /* Bare `length` with no argument is a syntax error. */
++  if (strcmp (t, "length") == 0)
++    {
++      consume (p);
++      builtin_error (_("syntax error: missing argument after `%s'"), "length");
++      p->err_status = EXPR_INVALID;
++      longjmp (p->err_jmp, 1);
++    }
++  if (strcmp (t, "match") == 0
++      && p->tok->next && p->tok->next->next)
++    {
++      consume (p);
++      a = parse_primary (p, evaluate);
++      b = parse_primary (p, evaluate);
++      if (evaluate)
++	v = expr_match (p, a, b);
++      else
++	v = val_num (0);
++      val_free (a);
++      val_free (b);
++      return v;
++    }
++  if (strcmp (t, "index") == 0
++      && p->tok->next && p->tok->next->next)
++    {
++      const char *pos;
++      intmax_t idx = 0;
++      consume (p);
++      a = parse_primary (p, evaluate);
++      b = parse_primary (p, evaluate);
++      if (evaluate)
++	{
++	  pos = strpbrk (a->str, b->str);
++	  if (pos)
++	    idx = (intmax_t)(pos - a->str) + 1;
++	}
++      val_free (a);
++      val_free (b);
++      return val_num (idx);
++    }
++  if (strcmp (t, "substr") == 0
++      && p->tok->next && p->tok->next->next && p->tok->next->next->next)
++    {
++      intmax_t pos, len;
++      size_t slen;
++      char *out;
++      consume (p);
++      a = parse_primary (p, evaluate);
++      b = parse_primary (p, evaluate);
++      c = parse_primary (p, evaluate);
++      if (!evaluate)
++	{
++	  val_free (a);
++	  val_free (b);
++	  val_free (c);
++	  return val_dup_str ("");
++	}
++      pos = val_to_num (p, b);
++      len = val_to_num (p, c);
++      slen = strlen (a->str);
++      if (pos < 1 || (uintmax_t)pos > slen || len < 1)
++	{
++	  val_free (a);
++	  val_free (b);
++	  val_free (c);
++	  return val_dup_str ("");
++	}
++      if ((uintmax_t)(pos - 1 + len) > slen)
++	len = (intmax_t)slen - (pos - 1);
++      out = (char *)xmalloc ((size_t)len + 1);
++      memcpy (out, a->str + pos - 1, (size_t)len);
++      out[len] = '\0';
++      val_free (a);
++      val_free (b);
++      val_free (c);
++      return val_str (out);
++    }
++
++  /* GNU coreutils extension: a leading `+` quotes the next token so
++     that operator-looking strings can be passed as operands.  A bare
++     `+` with nothing following is a syntax error. */
++  if (strcmp (t, "+") == 0 && p->tok->next != NULL)
++    {
++      consume (p);
++      return val_dup_str (consume (p));
++    }
++  if (strcmp (t, "+") == 0)
++    {
++      consume (p);
++      builtin_error (_("syntax error: missing argument after `+'"));
++      p->err_status = EXPR_INVALID;
++      longjmp (p->err_jmp, 1);
++    }
++
++  return val_dup_str (consume (p));
++}
++
++static struct val *
++parse_match (struct parser *p, int evaluate)
++{
++  struct val *l = parse_primary (p, evaluate);
++  while (match_op (p, ":"))
++    {
++      struct val *r = parse_primary (p, evaluate);
++      if (evaluate)
++	{
++	  struct val *n = expr_match (p, l, r);
++	  val_free (l);
++	  l = n;
++	}
++      val_free (r);
++    }
++  return l;
++}
++
++static struct val *
++parse_muldiv (struct parser *p, int evaluate)
++{
++  struct val *l = parse_match (p, evaluate);
++  for (;;)
++    {
++      const char *t = peek (p);
++      intmax_t a, b, r;
++      struct val *rhs;
++      if (!t || (strcmp (t, "*") && strcmp (t, "/") && strcmp (t, "%")))
++	break;
++      consume (p);
++      rhs = parse_match (p, evaluate);
++      if (!evaluate)
++	{
++	  val_free (l);
++	  val_free (rhs);
++	  l = val_num (0);
++	  continue;
++	}
++      a = val_to_num (p, l);
++      b = val_to_num (p, rhs);
++      if (t[0] != '*' && b == 0)
++	{
++	  val_free (l);
++	  val_free (rhs);
++	  builtin_error (_("division by zero"));
++	  p->err_status = EXPR_INVALID;
++	  longjmp (p->err_jmp, 1);
++	}
++      switch (t[0])
++	{
++	case '*': r = a * b; break;
++	case '/': r = a / b; break;
++	default:  r = a % b; break;
++	}
++      val_free (l);
++      val_free (rhs);
++      l = val_num (r);
++    }
++  return l;
++}
++
++static struct val *
++parse_addsub (struct parser *p, int evaluate)
++{
++  struct val *l = parse_muldiv (p, evaluate);
++  for (;;)
++    {
++      const char *t = peek (p);
++      intmax_t a, b, r;
++      struct val *rhs;
++      if (!t || (strcmp (t, "+") && strcmp (t, "-")))
++	break;
++      consume (p);
++      rhs = parse_muldiv (p, evaluate);
++      if (!evaluate)
++	{
++	  val_free (l);
++	  val_free (rhs);
++	  l = val_num (0);
++	  continue;
++	}
++      a = val_to_num (p, l);
++      b = val_to_num (p, rhs);
++      r = (t[0] == '+') ? a + b : a - b;
++      val_free (l);
++      val_free (rhs);
++      l = val_num (r);
++    }
++  return l;
++}
++
++static int
++val_compare (struct val *l, struct val *r)
++{
++  if (l->have_num && r->have_num)
++    {
++      if (l->num < r->num) return -1;
++      if (l->num > r->num) return 1;
++      return 0;
++    }
++  return strcoll (l->str, r->str);
++}
++
++static int
++compare_op (const char *t)
++{
++  if (!t) return 0;
++  if (strcmp (t, "<") == 0)        return 1;
++  if (strcmp (t, "<=") == 0)       return 2;
++  if (strcmp (t, "=") == 0)        return 3;
++  if (strcmp (t, "==") == 0)       return 3;
++  if (strcmp (t, "!=") == 0)       return 4;
++  if (strcmp (t, ">=") == 0)       return 5;
++  if (strcmp (t, ">") == 0)        return 6;
++  return 0;
++}
++
++static struct val *
++parse_compare (struct parser *p, int evaluate)
++{
++  struct val *l = parse_addsub (p, evaluate);
++  int op;
++  while ((op = compare_op (peek (p))) != 0)
++    {
++      int cmp;
++      struct val *rhs;
++      consume (p);
++      rhs = parse_addsub (p, evaluate);
++      if (!evaluate)
++	{
++	  val_free (l);
++	  val_free (rhs);
++	  l = val_num (0);
++	  continue;
++	}
++      cmp = val_compare (l, rhs);
++      val_free (l);
++      val_free (rhs);
++      switch (op)
++	{
++	case 1: l = val_num (cmp <  0); break;
++	case 2: l = val_num (cmp <= 0); break;
++	case 3: l = val_num (cmp == 0); break;
++	case 4: l = val_num (cmp != 0); break;
++	case 5: l = val_num (cmp >= 0); break;
++	default: l = val_num (cmp > 0); break;
++	}
++    }
++  return l;
++}
++
++static struct val *
++parse_and (struct parser *p, int evaluate)
++{
++  struct val *l = parse_compare (p, evaluate);
++  while (match_op (p, "&"))
++    {
++      struct val *r = parse_compare (p, evaluate && val_truthy (l));
++      if (evaluate && val_truthy (l) && val_truthy (r))
++	{
++	  val_free (r);
++	}
++      else
++	{
++	  val_free (l);
++	  val_free (r);
++	  l = val_num (0);
++	}
++    }
++  return l;
++}
++
++static struct val *
++parse_or (struct parser *p, int evaluate)
++{
++  struct val *l = parse_and (p, evaluate);
++  while (match_op (p, "|"))
++    {
++      struct val *r = parse_and (p, evaluate && !val_truthy (l));
++      if (val_truthy (l))
++	{
++	  val_free (r);
++	}
++      else if (r->str[0] != '\0')
++	{
++	  val_free (l);
++	  l = r;
++	}
++      else
++	{
++	  val_free (l);
++	  val_free (r);
++	  l = val_num (0);
++	}
++    }
++  return l;
++}
++
++int
++expr_builtin (WORD_LIST *list)
++{
++  struct parser p;
++  struct val *v;
++  int truthy;
++
++  CHECK_HELPOPT (list);
++
++  /* Skip a single leading `--` separator. */
++  if (list && list->word && ISOPTION (list->word->word, '-'))
++    list = list->next;
++
++  if (list == 0)
++    {
++      builtin_error (_("syntax error: expression expected"));
++      return EXPR_INVALID;
++    }
++
++  p.tok = list;
++  p.err_status = 0;
++  if (setjmp (p.err_jmp) != 0)
++    return p.err_status;
++
++  v = parse_or (&p, 1);
++
++  if (p.tok != NULL)
++    {
++      val_free (v);
++      builtin_error (_("syntax error: unexpected `%s`"), p.tok->word->word);
++      return EXPR_INVALID;
++    }
++
++  printf ("%s\n", v->str);
++  truthy = val_truthy (v);
++  val_free (v);
++  return truthy ? EXECUTION_SUCCESS : EXECUTION_FAILURE;
++}
+-- 
+2.54.0.windows.1
+

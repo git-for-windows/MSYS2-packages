@@ -1,0 +1,151 @@
+From 6ab179595431df0e0aab9a5965af900e68dd4b9b Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 29 May 2026 16:43:47 +0200
+Subject: [PATCH 12/N] execute_cmd: introduce `nofastspawn` shopt and
+ `fast_spawn_command(...)` scaffold
+
+A subsequent commit on this branch will introduce a spawnve-based fast
+path for synchronous external commands on MSYS2/Cygwin, where
+`fork(...)` is expensive enough that bypassing it for the common case
+of running a single external program is worth a substantial chunk of
+machinery. That machinery wants two things from day one, before any
+fast-path code actually executes: a runtime escape hatch in case a
+regression slips into a release, and a single dedicated call site in
+`execute_disk_command(...)` that other commits can extend incrementally.
+
+This commit puts both in place as a scaffold. The `nofastspawn` shopt
+controls a global `nofastspawn_set` flag (off by default). When set, the
+future fast path declines immediately and the caller falls through to
+the regular `fork(...)` + `exec(...)` path, giving users an in-shell
+knob to sidestep a fast-path regression without having to downgrade the
+bash package. As no fast-spawn functionality is in place yet, the
+scaffold function `fast_spawn_command(...)` always declines for now.
+
+`fast_spawn_command(...)`'s signature is fixed in this scaffold to
+what the upcoming feature commits need (`command`, `words`,
+`redirects`, `command_line`, `pipe_in`, `pipe_out`, `async`,
+`fds_to_close`, `cmdflags`) so that the call site in
+`execute_disk_command(...)` does not have to be rewritten each time a
+new argument is plumbed in.
+
+Guarded by `__CYGWIN__` since the fast path exists solely for the
+MSYS2/Cygwin emulated `fork(...)` cost. On other platforms the
+scaffold compiles away entirely and `execute_disk_command(...)`
+continues to call `make_child(...)` directly.
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ builtins/shopt.def |  7 +++++++
+ execute_cmd.c      | 51 ++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+)
+
+diff --git a/builtins/shopt.def b/builtins/shopt.def
+index cf6f6be..0bedcab 100644
+--- a/builtins/shopt.def
++++ b/builtins/shopt.def
+@@ -129,6 +129,10 @@ int expand_once_flag;
+ extern int syslog_history;
+ #endif
+ 
++#if defined (__CYGWIN__)
++extern int nofastspawn_set;
++#endif
++
+ static void shopt_error (char *);
+ 
+ static int set_shellopts_after_change (char *, int);
+@@ -249,6 +253,9 @@ static struct {
+   { "nocaseglob", &glob_ignore_case, (shopt_set_func_t *)NULL },
+   { "nocasematch", &match_ignore_case, (shopt_set_func_t *)NULL },
+   { "noexpand_translation", &singlequote_translations, (shopt_set_func_t *)NULL },
++#if defined (__CYGWIN__)
++  { "nofastspawn", &nofastspawn_set, (shopt_set_func_t *)NULL },
++#endif
+   { "nullglob",	&allow_null_glob_expansion, (shopt_set_func_t *)NULL },
+   { "patsub_replacement", &patsub_replacement, (shopt_set_func_t *)NULL },
+ #if defined (PROGRAMMABLE_COMPLETION)
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 070f511..b45d472 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -180,6 +180,12 @@ static void execute_subshell_builtin_or_function (WORD_LIST *, REDIRECT *,
+ static int execute_disk_command (WORD_LIST *, REDIRECT *, char *,
+ 				      int, int, int, struct fd_bitmap *, int);
+ 
++#ifdef __CYGWIN__
++static pid_t fast_spawn_command (char *, WORD_LIST *, REDIRECT *,
++				 char *, int, int, int,
++				 struct fd_bitmap *, int);
++#endif
++
+ static char *getinterp (char *, int, int *);
+ static void initialize_subshell (void);
+ static int execute_in_subshell (COMMAND *, int, int, int, struct fd_bitmap *);
+@@ -198,6 +204,14 @@ static int execute_intern_function (WORD_DESC *, FUNCTION_DEF *);
+    so that reader_loop can set it to zero before executing a command. */
+ int stdin_redir;
+ 
++#ifdef __CYGWIN__
++/* When set via `shopt -s nofastspawn', the spawnve()-based fast path for
++   external commands is bypassed and execution falls through to the regular
++   fork()+exec() path.  Provides a runtime escape hatch for users who hit
++   a fast-path regression. */
++int nofastspawn_set = 0;
++#endif
++
+ /* The name of the command that is currently being executed.
+    `test' needs this, for example. */
+ char *this_command_name;
+@@ -5831,7 +5845,18 @@ execute_disk_command (WORD_LIST *words, REDIRECT *redirects, char *command_line,
+   else
+     {
+       fork_flags = async ? FORK_ASYNC : 0;
++#ifdef __CYGWIN__
++      pid = (command != 0)
++	      ? fast_spawn_command (command, words, redirects,
++				    command_line, pipe_in,
++				    pipe_out, async, fds_to_close,
++				    cmdflags)
++	      : (pid_t)-1;
++      if (pid == (pid_t)-1)
++	pid = make_child (p = savestring (command_line), fork_flags);
++#else
+       pid = make_child (p = savestring (command_line), fork_flags);
++#endif
+     }
+ 
+   if (pid == 0)
+@@ -6407,3 +6432,29 @@ do_piping (int pipe_in, int pipe_out)
+ #endif /* __CYGWIN__ */
+     }
+ }
++
++#ifdef __CYGWIN__
++/* Spawnve-based fast path for synchronous external commands on
++   MSYS2/Cygwin.  This is a scaffold: the function always declines.
++   Subsequent commits fill in actual fast-path support for the common
++   cases (plain externals, simple redirections, pipelines, heredocs,
++   async, etc.).  The scaffold exists from the start of the patch
++   series so that the user-visible escape hatch (the `nofastspawn'
++   shopt) and the caller's decline-handling logic are in place before
++   any fast-path code executes. */
++static pid_t
++fast_spawn_command (char *command, WORD_LIST *words,
++		    REDIRECT *redirects, char *command_line,
++		    int pipe_in, int pipe_out, int async,
++		    struct fd_bitmap *fds_to_close, int cmdflags)
++{
++  /* Runtime escape hatch: when `shopt -s nofastspawn' is in effect,
++     always decline so the caller falls through to the regular
++     fork()+exec() path.  Useful to verify whether an issue is caused
++     by the fast path. */
++  if (nofastspawn_set)
++    return (pid_t)-1;
++  /* No fast-path implementation yet.  Decline. */
++  return (pid_t)-1;
++}
++#endif /* __CYGWIN__ */
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,117 @@
+From e96a81bd5659ba793e8e99de31876d27ebc4eebc Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 11 May 2026 20:56:16 +0200
+Subject: [PATCH 25/N] execute_cmd: lift fd >= 3 redirect restriction in the
+ spawnve fast path
+
+The redirection filter rejects any redirect whose redirector fd is >= 3,
+citing that `add_undo_redirect()` in `redir.c` does not force
+close-on-exec on the parent-side save fd when the original fd was
+open-on-exec. Without that guarantee, the save fd would be inherited by
+the `spawnve()` child as some high-numbered fd, exactly the kind of
+pipeline-stage fd leak the rest of the fast path works hard to avoid.
+
+Lift the restriction by walking the new undo list after
+`do_redirections()` succeeds and forcing `FD_CLOEXEC` on each save fd
+explicitly. Each undo entry built by `add_undo_redirect()` is a chained
+pair: an `r_duplicating_input` or `r_duplicating_output` to dup the save
+fd back over the original, followed by an `r_close_this` to close the
+save fd. The save fd is the redirectee of the duplicating entry, so a
+single linked-list traversal that picks out `r_duplicating_input` and
+`r_duplicating_output` entries finds them all.
+
+After `spawnve()`, `cleanup_redirects()` runs the undo list as a normal
+sequence of redirections: `dup2()` from the save fd back over the
+original fd, which POSIX requires clears `FD_CLOEXEC` on the target. So
+the forced `FD_CLOEXEC` on the save fd does not leak into the restored
+original. Re-marking save fds that were already `FD_CLOEXEC` (the fd < 3
+case, or fd >= 3 with `O_CLOEXEC` already set) is a no-op.
+
+Test:
+
+  $ exec 3>/tmp/parent.fd3        # parent has fd 3 open
+  $ sh -c 'ls /proc/self/fd' 3>/tmp/child.fd3
+    0 -> /dev/cons0
+    1 -> pipe:[...]
+    2 -> /dev/null
+    3 -> /tmp/child.fd3            # the user's redirect
+    4 -> /proc/.../fd              # ls's own opendir
+                                   # no leaked save fd
+  $ echo "still here" >&3          # parent fd 3 still open
+
+The "still here" text reaches `/tmp/parent.fd3` as expected, so
+`cleanup_redirects()` restored the parent's fd 3 correctly.
+
+This change covers redirections on the user-visible redirect list.  Pipe
+save fds (`saved_fd0` / `saved_fd1`) created by `fast_spawn_command()`'s
+own setup are already explicitly marked `FD_CLOEXEC` via `fcntl(F_SETFD,
+FD_CLOEXEC)` at `dup()` time, and the `fds_to_close` bitmap entries are
+restored to their original `FD_CLOEXEC` state by the existing
+save/restore pass.
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 39 +++++++++++++++++++++++++++++++++------
+ 1 file changed, 33 insertions(+), 6 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 28d2a18..0e8cd9b 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6598,12 +6598,10 @@ fast_spawn_redirect_one_supported (REDIRECT *r)
+   if (r->rflags & REDIR_VARASSIGN)
+     return 0;
+ 
+-  /* Limit to file descriptors 0, 1 and 2.  add_undo_redirect() can leave
+-     the parent-side save fd open across exec for higher fds, which would
+-     leak into the spawned child.  Forcing close-on-exec on all save fds
+-     before spawnve would close that gap, but is more invasive than this
+-     initial cut warrants. */
+-  if (r->redirector.dest < 0 || r->redirector.dest > 2)
++  /* A negative redirector is the parser's record of an out-of-range
++     file descriptor; let make_child reject it the same way it always
++     has. */
++  if (r->redirector.dest < 0)
+     return 0;
+ 
+   switch (r->instruction)
+@@ -6867,6 +6865,35 @@ fast_spawn_command (char *command, WORD_LIST *words,
+       redirection_undo_list = saved_undo_list;
+       exec_redirection_undo_list = saved_exec_undo_list;
+       redirected = 1;
++
++      /* Force FD_CLOEXEC on each save fd in the undo list before the
++	 spawnve.  add_undo_redirect() in redir.c only sets close-on-
++	 exec on save fds when the original fd was < 3 or had
++	 close-on-exec set; for higher fds whose original was
++	 open-on-exec, the save fd is left open-on-exec too and would
++	 otherwise be inherited by the spawnve child.  Without this
++	 walk, `cmd 3>foo' would let the spawned child see the save
++	 copy of the original fd 3 at some high-numbered slot.
++
++	 Each undo entry is a chained pair (r_duplicating_input or
++	 r_duplicating_output to restore, then r_close_this to close
++	 the save fd).  The save fd is the redirectee in the
++	 duplicating entries.  cleanup_redirects after spawnve runs
++	 dup2 from save fd back to the original, which clears the
++	 CLOEXEC bit on the target as POSIX requires, so our forced
++	 CLOEXEC on save fds does not affect the restored original. */
++      {
++	REDIRECT *u;
++	for (u = new_undo_list; u; u = u->next)
++	  if (u->instruction == r_duplicating_input
++	      || u->instruction == r_duplicating_output)
++	    {
++	      int sfd = u->redirectee.dest;
++	      int flags;
++	      if (sfd >= 0 && (flags = fcntl (sfd, F_GETFD)) >= 0)
++		fcntl (sfd, F_SETFD, flags | FD_CLOEXEC);
++	    }
++      }
+     }
+ 
+   making_children ();
+-- 
+2.54.0.windows.1
+

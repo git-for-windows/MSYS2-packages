@@ -1,0 +1,258 @@
+From 86ef3cf3395c3451b2c921026dc6e1f8597bddc8 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 6 May 2026 19:25:42 +0200
+Subject: [PATCH 18/N] execute_cmd: bypass the early fork in pipeline stages
+
+The function `execute_simple_command()` forks early for any command with
+a pipe or async marker. By the time the fast-spawn path could kick in,
+it is too late.
+
+Fix that. When the conditions are right, do word expansion, builtin /
+function detection and `PATH` resolution in the parent, and hand the
+resolved external straight to `fast_spawn_command()`, which spawns it
+via `spawnve()` with the pipe fds already wired up. No fork happens at
+any point; the parent goes directly from "we have a pipeline stage" to
+"we have a registered child pid".
+
+A microbenchmark of 200 iterations of `/usr/bin/true | /usr/bin/cat`
+drops from ~13.6s (distro bash) to ~7.4s warm, about 1.83x faster than
+the unpatched Bash and matching the speedup the simple external-command
+path already enjoyed. `t/t1022-read-tree-partial-clone.sh`, which has a
+few pipelines under `do_test_run`, drops a further ~5% (2.50s to 2.39s).
+
+The new helper `try_fast_simple_spawn()` is intentionally conservative
+in what it accepts; the goal is to be safe in a single audit pass rather
+than to maximize coverage in this first cut. The eligibility criteria
+are as follows. Only synchronous pipeline stages qualify; async stages
+route through different bookkeeping in `execute_simple_command()`
+(`subshell_environment`, `last_asynchronous_pid`) that the fast path
+does not yet replicate. The command must have no `W_ASSIGNMENT` words
+anywhere in `simple_command->words`: the whole point of the early fork
+is to keep `VAR=val cmd` from setting `VAR` in the parent shell, so
+expansion in the parent has to refuse cases where expansion would mutate
+parent state. None of `${`, `$(` or backtick may appear anywhere in the
+literal words: plain `$VAR` is a pure read of shell state and is
+observably identical whether evaluated in parent or child; `${VAR:=...}`
+can assign and `$(...)` or backticks run arbitrary commands with
+arbitrary side effects, all of which would be "in the parent instead of
+in the child" on the fast path. Redirections must still pass
+`fast_spawn_redirect_supported()`. The resolved first word may not be a
+shell builtin (regular, special or assignment) and may not be a shell
+function; both must run in-process and cannot be spawned. This last
+check is done after expansion via `find_special_builtin()`,
+`find_shell_builtin()` and `find_function()` on the now-resolved name.
+
+Trade-offs explicitly considered. Word expansion in the parent versus
+the child: eligibility above guarantees no observable difference, since
+there is no command substitution, no parameter expansion with
+assignment, and no `W_ASSIGNMENT` side effects; plain `$VAR`, `${VAR}`,
+`${VAR/foo/bar}`, glob and tilde expansions are all pure reads of shell
+state. `search_for_command()` in the parent versus the child walks
+`PATH` (with hash-cache shortcut for repeats) and `stat()`s the
+candidate; no mutation of shell state, and the cost is amortized across
+iterations because the hash cache survives between calls.
+`put_command_name_into_env()` and `maybe_make_export_env()` update `_`
+in the environment and may regenerate `export_env`; the regular path
+does the same in `execute_disk_command()`, so doing them earlier in the
+parent is safe and avoids a redundant re-evaluation. On error paths, if
+`fast_spawn_command()` fails (`spawnve()` returned -1, or a redirect
+failure inside the helper bailed out), the code path falls back to
+forking a child process; the forked child re-does the redirections and
+fails there with the same error message, so the diagnostic may appear
+once or twice depending on which step failed.
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 149 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 147 insertions(+), 2 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 349699f..d4a5c8a 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -201,6 +201,8 @@ static int execute_disk_command (WORD_LIST *, REDIRECT *, char *,
+ static pid_t fast_spawn_command (char *, WORD_LIST *, REDIRECT *,
+ 				 char *, int, int, int,
+ 				 struct fd_bitmap *, int);
++static pid_t try_fast_simple_spawn (SIMPLE_COM *, int, int, int,
++				    struct fd_bitmap *, int);
+ #endif
+ 
+ static char *getinterp (char *, int, int *);
+@@ -4620,6 +4622,29 @@ execute_simple_command (SIMPLE_COM *simple_command, int pipe_in, int pipe_out, i
+ 	(simple_command->words->word->word[0] == '%'))
+     dofork = 0;
+ 
++#ifdef __CYGWIN__
++  /* Try the spawnve fast path before paying for the early fork.  If
++     the helper accepts the command it has already spawned the child
++     and registered it in the job table; we just need to do the
++     parent-side cleanup that the regular fork path does after
++     make_child returns the parent pid (close pipe ends, leave $?
++     alone for non-final pipeline stages, return).  See
++     try_fast_simple_spawn for the eligibility criteria. */
++  if (dofork)
++    {
++      pid_t fast_pid = try_fast_simple_spawn (simple_command, pipe_in,
++					      pipe_out, async, fds_to_close,
++					      cmdflags);
++      if (fast_pid >= 0)
++	{
++	  if (pipe_out != NO_PIPE)
++	    result = last_command_exit_value;
++	  close_pipes (pipe_in, pipe_out);
++	  return (result);
++	}
++    }
++#endif /* __CYGWIN__ */
++
+   if (dofork)
+     {
+       char *p, *xc;
+@@ -6597,8 +6622,17 @@ fast_spawn_redirect_supported (REDIRECT *list)
+    `exec_redirection_undo_list` are protocol-managed: saved on entry,
+    set to `NULL` across `do_redirections(...)` (so the caller's
+    existing pending undos are not disposed), captured on success, and
+-   restored.  Subsequent commits extend the fast path to cover more
+-   cases (pipelines, heredocs, async, ...). */
++   restored.
++
++   For pipeline stages, `pipe_in` and `pipe_out` are dup'd into fd 0
++   and fd 1 in the parent (saving the originals so they can be
++   restored) and the `fds_to_close` bitmap (extra pipe ends from
++   neighboring stages) is given `FD_CLOEXEC` so `spawnve(...)`'s child
++   does not inherit those fds.  The regular fork path achieves the
++   same effect in the post-fork child via `do_piping(...)` and
++   `close_fd_bitmap(...)`; the fast path has to do it here in the
++   parent because `spawnve(...)` does not give a "between fork and
++   exec" hook to run code in the child. */
+ static pid_t
+ fast_spawn_command (char *command, WORD_LIST *words,
+ 		    REDIRECT *redirects, char *command_line,
+@@ -6630,6 +6664,12 @@ fast_spawn_command (char *command, WORD_LIST *words,
+     return FAST_SPAWN_DECLINE;
+   if (cmdflags & CMD_NO_FORK)
+     return FAST_SPAWN_DECLINE;
++  if (pipe_out == REDIRECT_BOTH)
++    /* `cmd |& next' merges stderr into the pipe.  do_piping handles
++       this by dup2(1, 2) AFTER the rest of the pipe redirection has
++       happened; we'd need to interleave that into our pipe setup
++       below.  Defer to a follow-up.  */
++    return FAST_SPAWN_DECLINE;
+   if (redirects && !fast_spawn_redirect_supported (redirects))
+     return FAST_SPAWN_DECLINE;
+ 
+@@ -6816,4 +6856,109 @@ pipe_setup_fail:
+   sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
+   return FAST_SPAWN_DECLINE;
+ }
++
++/* Bypass the early fork in execute_simple_command for pipeline /
++   async stages whose command is unambiguously an external program
++   we can hand straight to spawnve.  Returns the pid of the spawned
++   child on success, or (pid_t)-1 if the fast path declined and the
++   caller should fall back to the regular fork path.
++
++   This is the upstream half of the spawnve fast path: the dispatcher
++   in execute_disk_command already shortcuts plain external commands,
++   but execute_simple_command forks before that for any pipe stage,
++   making the dispatcher unreachable in pipelines.  Here we attempt
++   to take the same shortcut earlier, so a pipeline like `cmd | other'
++   never has to pay the fork() cost in the parent.
++
++   Eligibility (intentionally conservative for an initial cut):
++     - synchronous (async commands have a different bookkeeping regime
++       in execute_simple_command);
++     - no W_ASSIGNMENT words (would mutate parent shell state);
++     - no `${', `$(' or backticks anywhere in the literal words
++       (parameter-expansion-with-side-effects, command substitution,
++       command substitution, all of which would run in the parent
++       rather than in the child);
++     - redirections pass fast_spawn_redirect_supported;
++     - the resolved first word is not a shell builtin or function. */
++static pid_t
++try_fast_simple_spawn (SIMPLE_COM *simple_command,
++		       int pipe_in, int pipe_out, int async,
++		       struct fd_bitmap *fds_to_close, int cmdflags)
++{
++  WORD_LIST *w, *expanded;
++  char *path = NULL;
++  char *command_line = NULL;
++  pid_t pid;
++
++  if (async)
++    return (pid_t)-1;
++
++  for (w = simple_command->words; w; w = w->next)
++    {
++      const char *s;
++
++      if (w->word->flags & W_ASSIGNMENT)
++	return (pid_t)-1;
++
++      s = w->word->word;
++      if (s == NULL)
++	return (pid_t)-1;
++
++      if (strstr (s, "${") || strstr (s, "$(") || strchr (s, '`'))
++	return (pid_t)-1;
++    }
++
++  if (simple_command->redirects
++      && !fast_spawn_redirect_supported (simple_command->redirects))
++    return (pid_t)-1;
++
++  /* Word expansion in the parent.  Eligibility above guarantees no
++     command substitution, no command substitution, and no parameter
++     expansion with assignment side effects, so this is observably
++     equivalent to expanding in the post-fork child. */
++  expanded = expand_simple_command_words (simple_command, cmdflags,
++					  fds_to_close);
++
++  if (expanded == NULL || expanded->word == NULL
++      || expanded->word->word == NULL || expanded->word->word[0] == '\0')
++    {
++      dispose_words (expanded);
++      return (pid_t)-1;
++    }
++
++  /* If the first word names a shell builtin or function we cannot
++     spawn it; bail out and let the regular path run it in-process
++     (after forking, since dofork is true). */
++  if (find_special_builtin (expanded->word->word)
++      || find_shell_builtin (expanded->word->word)
++      || find_function (expanded->word->word))
++    {
++      dispose_words (expanded);
++      return (pid_t)-1;
++    }
++
++  path = resolve_simple_command_path (expanded->word->word, cmdflags);
++  if (path == NULL)
++    {
++      dispose_words (expanded);
++      return (pid_t)-1;
++    }
++
++  command_line = savestring (the_printed_command_except_trap
++			      ? the_printed_command_except_trap : "");
++
++  pid = fast_spawn_command (path, expanded, simple_command->redirects,
++			    command_line, pipe_in, pipe_out, async,
++			    fds_to_close, cmdflags);
++
++  /* fast_spawn_command's register_spawned_child copies command_line
++     via savestring, so our local copy can go.  Likewise the resolved
++     path: spawnve only used it to look up the executable, it owns no
++     reference to the string. */
++  free (command_line);
++  free (path);
++  dispose_words (expanded);
++
++  return pid;
++}
+ #endif /* __CYGWIN__ */
+-- 
+2.54.0.windows.1
+
