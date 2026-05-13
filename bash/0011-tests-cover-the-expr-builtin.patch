@@ -1,0 +1,201 @@
+From 354d440d40ffde1a3f311071b46ed51fc5b7b149 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 6 May 2026 09:45:38 +0200
+Subject: [PATCH 11/25] tests: cover the expr builtin
+
+Add tests/expr.tests, tests/expr.right and tests/run-expr to
+exercise every operator and named operation supported by the new
+expr builtin: arithmetic (+, -, *, /, %, parentheses, signed
+overflow into intmax_t), the six comparison operators with both
+the numeric and the lexical paths, the short-circuiting | and &,
+the `:' regex match (with and without a \( \) capture group, both
+matching and non-matching), length, substr (including the
+out-of-range edge cases POSIX requires to return ""), index and
+match.  Each test prints its result through a helper that also
+prints the exit status, so the .right file pins down both.
+
+The error-case tests deliberately suppress stderr and check only
+the exit status, so that the same expectations match the builtin
+and /usr/bin/expr; this was used during development to confirm
+that the builtin is bug-compatible with GNU coreutils' expr on
+every observable behavior the test exercises (verified by
+substituting `enable -n expr' for the keyword-loading line and
+re-running, then diffing the captured outputs -- they were
+identical).
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ tests/expr.right | 49 +++++++++++++++++++++++++
+ tests/expr.tests | 93 ++++++++++++++++++++++++++++++++++++++++++++++++
+ tests/run-expr   |  2 ++
+ 3 files changed, 144 insertions(+)
+ create mode 100644 tests/expr.right
+ create mode 100644 tests/expr.tests
+ create mode 100644 tests/run-expr
+
+diff --git a/tests/expr.right b/tests/expr.right
+new file mode 100644
+index 0000000..798277e
+--- /dev/null
++++ b/tests/expr.right
+@@ -0,0 +1,49 @@
++[0] 5
++[0] 6
++[0] 42
++[0] 3
++[0] 2
++[0] 7
++[0] 9
++[0] -2
++[0] 2147483648
++[0] 1
++[0] 1
++[0] 1
++[0] 1
++[0] 1
++[0] 1
++[0] 1
++[1] 0
++[0] foo
++[0] bar
++[0] bar
++[0] foo
++[1] 0
++[1] 0
++[0] 3
++[1] 0
++[0] bcde
++[1] 
++[0] 123
++[1] 0
++[0] 5
++[1] 0
++[0] world
++[0] hello
++[1] 
++[1] 
++[0] 5
++[1] 0
++[0] b
++[0] 6
++true-rc-0
++false-rc-nonzero
++no-match-rc-nonzero
++rc=2
++rc=2
++rc=2
++rc=2
++rc=2
++rc=2
++[0] 8
+diff --git a/tests/expr.tests b/tests/expr.tests
+new file mode 100644
+index 0000000..64821c8
+--- /dev/null
++++ b/tests/expr.tests
+@@ -0,0 +1,93 @@
++#   This program is free software: you can redistribute it and/or modify
++#   it under the terms of the GNU General Public License as published by
++#   the Free Software Foundation, either version 3 of the License, or
++#   (at your option) any later version.
++#
++#   This program is distributed in the hope that it will be useful,
++#   but WITHOUT ANY WARRANTY; without even the implied warranty of
++#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++#   GNU General Public License for more details.
++#
++#   You should have received a copy of the GNU General Public License
++#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
++#
++# Make sure we exercise the builtin, not /usr/bin/expr.
++enable expr || { echo "expr builtin not available" >&2; exit 1; }
++
++# Helper: print the result and the exit status, so the .right file
++# pins both of them down.
++e()
++{
++	out=$(expr "$@")
++	rc=$?
++	printf '[%d] %s\n' "$rc" "$out"
++}
++
++# --- arithmetic ---------------------------------------------------------
++e 2 + 3
++e 10 - 4
++e 6 \* 7
++e 20 / 6
++e 20 % 6
++e 1 + 2 \* 3
++e \( 1 + 2 \) \* 3
++e -5 + 3
++e 2147483647 + 1
++
++# --- comparison: numeric vs lexical ------------------------------------
++e 2 = 2
++e 2 = 02			# numeric: equal
++e 2.34 \<= 2.40			# non-numeric: lexical
++e 2.34 \<= 2.4			# non-numeric: lexical, '4' > ''
++e abc = abc
++e abc \< abd
++e 5 \> 4
++e 5 != 5
++
++# --- logical | and & ----------------------------------------------------
++e foo \| bar
++e '' \| bar
++e 0 \| bar
++e foo \& bar
++e foo \& 0
++e '' \& bar
++
++# --- regex match: `:' operator -----------------------------------------
++e abc : 'a.c'			# no group: matched length
++e abc : 'x.c'			# no match, no group
++e abcdef : 'a\(.*\)f'		# group: captured substring
++e abc : 'x\(.*\)y'		# no match, with group: ''
++e foo123bar : '[a-z]*\([0-9]*\)'
++# `:' is left-anchored; the leading 'b' should not match
++e abc : 'b'
++
++# --- named operations --------------------------------------------------
++e length hello
++e length ''
++e substr 'hello world' 7 5
++e substr 'hello' 1 100
++e substr 'hello' 6 1
++e substr 'hello' 0 3
++e index 'hello world' 'wor'
++e index 'hello' 'xyz'
++e match abc 'a\(.*\)c'
++e match abcdef '[a-z]*'
++
++# --- exit status meaning -----------------------------------------------
++expr 1 \> 0 >/dev/null && echo true-rc-0
++expr 0 \> 1 >/dev/null || echo false-rc-nonzero
++expr foo : bar >/dev/null || echo no-match-rc-nonzero
++
++# --- error cases (exit status 2) ---------------------------------------
++# We only check the exit status, not the (implementation-specific) wording
++# of the error message, so that the same expectations match both the
++# builtin and /usr/bin/expr.
++expr 2>/dev/null; echo rc=$?
++expr 1 + 2>/dev/null; echo rc=$?
++expr \( 1 + 2 2>/dev/null; echo rc=$?
++expr foo + bar 2>/dev/null; echo rc=$?
++expr 1 / 0 2>/dev/null; echo rc=$?
++expr 1 % 0 2>/dev/null; echo rc=$?
++
++# --- leading `--' --------------------------------------------------------
++e -- 5 + 3
+diff --git a/tests/run-expr b/tests/run-expr
+new file mode 100644
+index 0000000..9089271
+--- /dev/null
++++ b/tests/run-expr
+@@ -0,0 +1,2 @@
++${THIS_SH} ./expr.tests 2>/dev/null > ${BASH_TSTOUT}
++diff ${BASH_TSTOUT} expr.right && rm -f ${BASH_TSTOUT}
+-- 
+2.53.0.windows.1
+

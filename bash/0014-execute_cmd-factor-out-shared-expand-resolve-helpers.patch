@@ -1,0 +1,165 @@
+From 3bdce00fbb8b68a886778be77e0a4c45dfce6026 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 6 May 2026 21:08:00 +0200
+Subject: [PATCH 14/25] execute_cmd: factor out shared expand/resolve helpers
+
+The fast-path commits added a try_fast_simple_spawn helper that does
+parent-side word expansion plus PATH resolution before handing the
+resolved external to fast_spawn_command.  Both pieces of work are also
+done by the slow path -- expansion in execute_simple_command (the big
+inline block around line 4640), PATH resolution in
+execute_disk_command (the search_for_command / maybe_make_export_env /
+put_command_name_into_env trio).  The fast path's near-duplicates of
+this code worked, but they would not track upstream changes to the
+slow path's behavior automatically; if a future bash release added a
+fixup or an unwind-protect to the slow path, the fast path would
+silently fall behind.
+
+Extract two static helpers in execute_cmd.c:
+
+  - expand_simple_command_words (simple_command, cmdflags, fds_to_close)
+    encapsulates the CMD_INHIBIT_EXPANSION fallback, the
+    current_fds_to_close stash/restore, fix_assignment_words,
+    fix_arrayref_words and the comsub_ignore_return adjustment around
+    expand_words.  This is the single source of truth for "expand a
+    SIMPLE_COM's words into a WORD_LIST".
+
+  - resolve_simple_command_path (pathname, cmdflags) wraps
+    search_for_command (with the CMDSRCH_HASH/CMDSRCH_STDPATH flag
+    selection) and the conditional maybe_make_export_env /
+    put_command_name_into_env that update the export environment when
+    a path is found.  This is the single source of truth for "resolve
+    a command name to an executable path and prime $_".
+
+Both helpers are now called from execute_simple_command (slow-path
+expansion), execute_disk_command (slow-path PATH resolution) and
+try_fast_simple_spawn (fast path uses both).  No behavior change is
+intended; the textual lines moved are byte-for-byte the same code.
+
+Microbenchmark variance check: 7-run medians on 200x
+`/usr/bin/true | /usr/bin/cat' are 7.04s pre-refactor and 7.12s
+post-refactor, a ~1% delta well within run-to-run noise.
+t1022-read-tree-partial-clone.sh runs at the same ~2.4s warm
+average.  No regression.
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 80 ++++++++++++++++++++++++++++++++++++---------------
+ 1 file changed, 57 insertions(+), 23 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index b73a890..6906a1b 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -507,6 +507,60 @@ shell_control_structure (enum command_type type)
+     }
+ }
+ 
++/* Expand a simple command's words, mirroring the pre/post setup the
++   slow path in execute_simple_command does around its expand_words
++   call.  Used by both the slow path and the spawnve fast path so the
++   two cannot drift if upstream changes the expansion contract. */
++static WORD_LIST *
++expand_simple_command_words (SIMPLE_COM *simple_command, int cmdflags,
++			     struct fd_bitmap *fds_to_close)
++{
++  WORD_LIST *words;
++
++  /* If we are re-running this as the result of executing the `command'
++     builtin, do not expand the command words a second time. */
++  if (cmdflags & CMD_INHIBIT_EXPANSION)
++    return copy_word_list (simple_command->words);
++
++  current_fds_to_close = fds_to_close;
++  fix_assignment_words (simple_command->words);
++#if defined (ARRAY_VARS)
++  fix_arrayref_words (simple_command->words);
++#endif
++  /* Pass the ignore return flag down to command substitutions */
++  if (cmdflags & CMD_IGNORE_RETURN)	/* XXX */
++    comsub_ignore_return++;
++  words = expand_words (simple_command->words);
++  if (cmdflags & CMD_IGNORE_RETURN)
++    comsub_ignore_return--;
++  current_fds_to_close = (struct fd_bitmap *)NULL;
++
++  return words;
++}
++
++/* Resolve the executable for a simple command via PATH (with bash's
++   hash cache for repeats) and update the export environment so the
++   spawned program can find its own name in $_.  Used by both
++   execute_disk_command and the spawnve fast path so the two cannot
++   drift on path-search semantics or the env-update side effects.
++   Returns a freshly-allocated path the caller must free, or NULL if
++   the command was not found. */
++static char *
++resolve_simple_command_path (const char *pathname, int cmdflags)
++{
++  int stdpath = (cmdflags & CMD_STDPATH);
++  char *command;
++
++  command = search_for_command (pathname,
++				CMDSRCH_HASH | (stdpath ? CMDSRCH_STDPATH : 0));
++  if (command)
++    {
++      maybe_make_export_env ();
++      put_command_name_into_env (command);
++    }
++  return command;
++}
++
+ /* A function to use to unwind_protect the redirection undo list
+    for loops. */
+ static void
+@@ -4608,25 +4662,8 @@ execute_simple_command (SIMPLE_COM *simple_command, int pipe_in, int pipe_out, i
+ 
+   QUIT;		/* XXX */
+ 
+-  /* If we are re-running this as the result of executing the `command'
+-     builtin, do not expand the command words a second time. */
+-  if ((cmdflags & CMD_INHIBIT_EXPANSION) == 0)
+-    {
+-      current_fds_to_close = fds_to_close;
+-      fix_assignment_words (simple_command->words);
+-#if defined (ARRAY_VARS)
+-      fix_arrayref_words (simple_command->words);
+-#endif
+-      /* Pass the ignore return flag down to command substitutions */
+-      if (cmdflags & CMD_IGNORE_RETURN)	/* XXX */
+-	comsub_ignore_return++;
+-      words = expand_words (simple_command->words);
+-      if (cmdflags & CMD_IGNORE_RETURN)
+-	comsub_ignore_return--;
+-      current_fds_to_close = (struct fd_bitmap *)NULL;
+-    }
+-  else
+-    words = copy_word_list (simple_command->words);
++  words = expand_simple_command_words (simple_command, cmdflags,
++				       fds_to_close);
+ 
+   /* It is possible for WORDS not to have anything left in it.
+      Perhaps all the words consisted of `$foo', and there was
+@@ -5811,7 +5848,7 @@ execute_disk_command (WORD_LIST *words, REDIRECT *redirects, char *command_line,
+      any pathname it finds into the hash table, it should read
+      command = search_for_command (pathname, stdpath ? CMDSRCH_STDPATH : CMDSRCH_HASH);
+   */
+-  command = search_for_command (pathname, CMDSRCH_HASH|(stdpath ? CMDSRCH_STDPATH : 0));
++  command = resolve_simple_command_path (pathname, cmdflags);
+   QUIT;
+ 
+   if (command)
+@@ -5821,9 +5858,6 @@ execute_disk_command (WORD_LIST *words, REDIRECT *redirects, char *command_line,
+ 	 in a pipeline environment, assuming it's already been done. */
+       if (nofork && pipe_in == NO_PIPE && pipe_out == NO_PIPE && (subshell_environment & SUBSHELL_PIPE) == 0)
+ 	adjust_shell_level (-1);
+-
+-      maybe_make_export_env ();
+-      put_command_name_into_env (command);
+     }
+   else if (command == 0 && notfound_str == 0)	/* make sure */
+     init_notfound_str ();
+-- 
+2.53.0.windows.1
+

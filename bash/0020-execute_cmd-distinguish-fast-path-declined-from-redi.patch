@@ -1,0 +1,271 @@
+From 84fd0697ec95e1ecbd5540bc52ac82da47dbf73c Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Mon, 11 May 2026 12:03:25 +0200
+Subject: [PATCH 20/25] execute_cmd: distinguish "fast path declined" from
+ "redirection failed"
+
+When fast_spawn_command bails out, the caller has had no way to tell
+whether the fast path was simply not eligible (e.g., the command is a
+builtin, or the redirection list contains process substitution) or
+whether it actually tried and reported a failure (a redirection target
+file did not exist, etc.).  Both cases used to return (pid_t)-1; the
+caller then forked and retried, which for the "already failed" case
+re-runs the same failing redirection in the post-fork child and prints
+the same diagnostic a second time.  Users complained about the
+duplicate error.
+
+Split the return value into two named sentinels:
+
+  FAST_SPAWN_DECLINE	the fast path was not eligible or was not
+			attempted; the caller should fall back to the
+			regular fork+exec path.
+
+  FAST_SPAWN_FAILED	the fast path actually attempted the work and
+			a parent-side redirection failed; the
+			diagnostic has been printed.
+
+Both sentinels are negative; positive return values remain "the pid of
+the spawned child".  The internal failure plumbing inside
+fast_spawn_command now carries a fail_status local that
+pipe_setup_fail returns; do_redirections failure sets it to
+FAST_SPAWN_FAILED and everything else (dup/dup2/spawnve failure)
+leaves it at the default FAST_SPAWN_DECLINE.
+
+Callers are updated to make the distinction:
+
+  - execute_disk_command's dispatcher (standalone-command path).  On
+    FAST_SPAWN_FAILED it sets last_command_exit_value to
+    EXECUTION_FAILURE and jumps to parent_return without forking, so
+    the diagnostic is printed exactly once and $? gets the right
+    value.
+
+  - execute_simple_command's hook (pipeline / async dofork path).
+    Here we *do* fall back to the slow path even on FAST_SPAWN_FAILED.
+    The reason is that this hook only runs for pipeline stages and
+    async commands, where the slow path's post-fork child registers
+    a process whose exit status feeds PIPESTATUS (for pipefail) and
+    last_asynchronous_pid (for $!).  If we just set
+    last_command_exit_value here, those would silently lose the
+    failed stage's status; e.g. `cmd </nope | cat' under pipefail
+    would return 0 because PIPESTATUS would contain only the cat's
+    exit.  The cost of falling back is that the post-fork child
+    re-attempts the same failing redirection and the diagnostic
+    appears twice.  Test:
+
+      $ set -o pipefail; cmd </nope | cat; echo $?
+      bash: /nope: No such file or directory
+      bash: /nope: No such file or directory
+      1
+      $ cmd </nope | cat; echo "${PIPESTATUS[@]}"
+      bash: /nope: No such file or directory
+      bash: /nope: No such file or directory
+      1 0
+
+    Standalone redirect failures take the no-duplicate path through
+    execute_disk_command's dispatcher and continue to print exactly
+    once:
+
+      $ cmd </nope; echo $?
+      bash: /nope: No such file or directory
+      1
+
+Verified manually for: standalone redirect fail (single error),
+pipeline + pipefail (correct rc, duplicate error), PIPESTATUS
+population (1 0), async + wait (rc=1).
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 79 +++++++++++++++++++++++++++++++++++++--------------
+ 1 file changed, 58 insertions(+), 21 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index c01e920..761a2bc 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -181,6 +181,21 @@ static int execute_disk_command (WORD_LIST *, REDIRECT *, char *,
+ 				      int, int, int, struct fd_bitmap *, int);
+ 
+ #ifdef __CYGWIN__
++/* Return values from fast_spawn_command and try_fast_simple_spawn.
++   A positive value is the pid of the spawned child.  A value <= 0
++   signals failure and tells the caller what to do next. */
++#define FAST_SPAWN_DECLINE	((pid_t)-1)	/* not eligible / not
++						   attempted; caller should
++						   fall back to the regular
++						   fork+exec path. */
++#define FAST_SPAWN_FAILED	((pid_t)-2)	/* parent-side redirection
++						   or pipe setup failed and
++						   the diagnostic has already
++						   been printed; caller should
++						   set last_command_exit_value
++						   to EXECUTION_FAILURE and
++						   NOT retry via fork+exec. */
++
+ static pid_t fast_spawn_command (char *, WORD_LIST *, REDIRECT *,
+ 					char *, int, int, int,
+ 					struct fd_bitmap *, int);
+@@ -4617,6 +4632,17 @@ execute_simple_command (SIMPLE_COM *simple_command, int pipe_in, int pipe_out, i
+ 	  close_pipes (pipe_in, pipe_out);
+ 	  return (result);
+ 	}
++      /* fast_pid == FAST_SPAWN_DECLINE or FAST_SPAWN_FAILED.  In
++	 either case we fall through to the regular early-fork path:
++	 for DECLINE because the fast path was not eligible, and for
++	 FAILED because we must let the post-fork child re-attempt the
++	 failing redirection so that its exit status is registered in
++	 PIPESTATUS (for pipefail) and last_asynchronous_pid (for $!).
++	 In the FAILED case the diagnostic will be printed twice -- once
++	 by our parent-side attempt and once by the child -- which is
++	 the price for getting the slow-path's bookkeeping right.  The
++	 single-message case (standalone command, no pipe, no async) is
++	 handled by execute_disk_command's dispatcher directly. */
+     }
+ #endif /* __CYGWIN__ */
+ 
+@@ -5902,16 +5928,22 @@ execute_disk_command (WORD_LIST *words, REDIRECT *redirects, char *command_line,
+ 	 is roughly twice as fast as the POSIX-emulated fork.  When the
+ 	 helper succeeds it returns the new child's pid, registers it in
+ 	 the job table, and we continue down the normal parent path so
+-	 that wait_for() reaps the child as usual.  If the helper cannot
+-	 handle the command (pipes, redirections, ...) it returns -1 and
+-	 we fall through to make_child below. */
++	 that wait_for() reaps the child as usual.  The helper may also
++	 return FAST_SPAWN_DECLINE to mean "fall through to make_child"
++	 or FAST_SPAWN_FAILED to mean "redirection failed; do not retry,
++	 the diagnostic has already been printed".  */
+       pid = (command != 0)
+ 	      ? fast_spawn_command (command, words, redirects,
+ 				    command_line, pipe_in,
+ 				    pipe_out, async, fds_to_close,
+ 				    cmdflags)
+-	      : (pid_t)-1;
+-      if (pid < 0)
++	      : FAST_SPAWN_DECLINE;
++      if (pid == FAST_SPAWN_FAILED)
++	{
++	  result = last_command_exit_value = EXECUTION_FAILURE;
++	  goto parent_return;
++	}
++      if (pid == FAST_SPAWN_DECLINE)
+ 	pid = make_child (p = savestring (command_line), fork_flags);
+ #else
+       pid = make_child (p = savestring (command_line), fork_flags);
+@@ -6256,18 +6288,19 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   int saved_fd0 = -1, saved_fd1 = -1;
+   int *saved_cloexec = NULL;
+   int i;
++  pid_t fail_status = FAST_SPAWN_DECLINE;
+ 
+   /* Conditions we don't yet handle.  Bail out and let make_child do it. */
+   if (cmdflags & CMD_NO_FORK)
+-    return (pid_t)-1;
++    return FAST_SPAWN_DECLINE;
+   if (pipe_out == REDIRECT_BOTH)
+     /* `cmd |& next' merges stderr into the pipe.  do_piping handles
+        this by dup2(1, 2) AFTER the rest of the pipe redirection has
+        happened; we'd need to interleave that into our pipe setup
+        below.  Defer to a follow-up.  */
+-    return (pid_t)-1;
++    return FAST_SPAWN_DECLINE;
+   if (redirects && !fast_spawn_redirect_supported (redirects))
+-    return (pid_t)-1;
++    return FAST_SPAWN_DECLINE;
+ 
+   /* Mirror make_child's signal blocking around the spawn so that SIGCHLD
+      for the new child is held until we have registered it in the job
+@@ -6346,13 +6379,15 @@ fast_spawn_command (char *command, WORD_LIST *words,
+ 	  /* Redirection failed; do_redirections has already printed an
+ 	     error and recorded inverse ops for whatever it managed to
+ 	     apply.  Roll those back, restore the caller's undo lists,
+-	     restore pipes/cloexec, unblock signals, and fall back to
+-	     the fork path so the child fails the same way under the
+-	     existing machinery. */
++	     restore pipes/cloexec, unblock signals, and return
++	     FAST_SPAWN_FAILED to tell the caller the failure has
++	     already been reported and a fork-path retry would just
++	     duplicate the diagnostic. */
+ 	  cleanup_redirects (redirection_undo_list);
+ 	  dispose_redirects (exec_redirection_undo_list);
+ 	  redirection_undo_list = saved_undo_list;
+ 	  exec_redirection_undo_list = saved_exec_undo_list;
++	  fail_status = FAST_SPAWN_FAILED;
+ 	  goto pipe_setup_fail;
+ 	}
+ 
+@@ -6411,9 +6446,11 @@ fast_spawn_command (char *command, WORD_LIST *words,
+ 
+   if (pid < 0)
+     {
+-      /* spawnve failed; restore signals and fall back to fork+exec. */
++      /* spawnve failed; restore signals and fall back to fork+exec.
++	 (No diagnostic was printed; the fork path will report any
++	 error from the child.) */
+       sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
+-      return (pid_t)-1;
++      return FAST_SPAWN_DECLINE;
+     }
+ 
+   fork_flags = async ? FORK_ASYNC : 0;
+@@ -6450,7 +6487,7 @@ pipe_setup_fail:
+       close (saved_fd0);
+     }
+   sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
+-  return (pid_t)-1;
++  return fail_status;
+ }
+ 
+ /* Bypass the early fork in execute_simple_command for pipeline /
+@@ -6489,19 +6526,19 @@ try_fast_simple_spawn (SIMPLE_COM *simple_command,
+       const char *s;
+ 
+       if (w->word->flags & W_ASSIGNMENT)
+-	return (pid_t)-1;
++	return FAST_SPAWN_DECLINE;
+ 
+       s = w->word->word;
+       if (s == NULL)
+-	return (pid_t)-1;
++	return FAST_SPAWN_DECLINE;
+ 
+       if (fast_spawn_word_has_unsafe_expansion (s))
+-	return (pid_t)-1;
++	return FAST_SPAWN_DECLINE;
+     }
+ 
+   if (simple_command->redirects
+       && !fast_spawn_redirect_supported (simple_command->redirects))
+-    return (pid_t)-1;
++    return FAST_SPAWN_DECLINE;
+ 
+   /* Word expansion in the parent.  Eligibility above guarantees no
+      command substitution, no command substitution, and no parameter
+@@ -6514,7 +6551,7 @@ try_fast_simple_spawn (SIMPLE_COM *simple_command,
+       || expanded->word->word == NULL || expanded->word->word[0] == '\0')
+     {
+       dispose_words (expanded);
+-      return (pid_t)-1;
++      return FAST_SPAWN_DECLINE;
+     }
+ 
+   /* If the first word names a shell builtin or function we cannot
+@@ -6525,14 +6562,14 @@ try_fast_simple_spawn (SIMPLE_COM *simple_command,
+       || find_function (expanded->word->word))
+     {
+       dispose_words (expanded);
+-      return (pid_t)-1;
++      return FAST_SPAWN_DECLINE;
+     }
+ 
+   path = resolve_simple_command_path (expanded->word->word, cmdflags);
+   if (path == NULL)
+     {
+       dispose_words (expanded);
+-      return (pid_t)-1;
++      return FAST_SPAWN_DECLINE;
+     }
+ 
+   command_line = savestring (the_printed_command_except_trap
+-- 
+2.53.0.windows.1
+

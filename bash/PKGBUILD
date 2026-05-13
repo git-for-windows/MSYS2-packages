@@ -6,7 +6,7 @@ pkgname=('bash' 'bash-devel')
 _basever=5.3
 _patchlevel=009 #prepare for some patches
 pkgver=${_basever}.${_patchlevel}
-pkgrel=1
+pkgrel=2
 pkgdesc="The GNU Bourne Again shell"
 arch=('i686' 'x86_64')
 license=('GPL')
@@ -28,7 +28,25 @@ source=(https://ftp.gnu.org/gnu/bash/bash-${_basever}.tar.gz{,.sig}
         0002-bash-4.3-msysize.patch
         0005-bash-4.3-msys2-fix-lineendings.patch
         0006-bash-4.3-add-pwd-W-option.patch
-        0007-fix-static-build.patch)
+        0007-fix-static-build.patch
+        0008-jobs-add-register_spawned_child-for-non-fork-child-r.patch
+        0009-execute_cmd-spawnve-fast-path-for-synchronous-extern.patch
+        0010-builtins-implement-expr.patch
+        0011-tests-cover-the-expr-builtin.patch
+        0012-execute_cmd-handle-simple-redirections-in-the-spawnv.patch
+        0013-execute_cmd-handle-pipeline-stages-in-the-spawnve-fa.patch
+        0014-execute_cmd-factor-out-shared-expand-resolve-helpers.patch
+        0015-execute_cmd-bypass-the-early-fork-in-pipeline-stages.patch
+        0016-execute_cmd-support-no-expansion-heredocs-in-the-spa.patch
+        0017-execute_cmd-extract-reusable-scanner-for-unsafe-word.patch
+        0018-execute_cmd-support-expanding-heredocs-whose-body-is.patch
+        0019-execute_cmd-support-async-commands-in-the-spawnve-fa.patch
+        0020-execute_cmd-distinguish-fast-path-declined-from-redi.patch
+        0021-execute_cmd-support-here-strings-word-in-the-spawnve.patch
+        0022-execute_cmd-remove-dead-REDIRECT_BOTH-bail-out-from-.patch
+        0023-execute_cmd-lift-fd-3-redirect-restriction-in-the-sp.patch
+        0024-execute_cmd-bail-to-fork-path-for-interactive-async-.patch
+        0025-execute_cmd-wrap-the-spawnve-fast-path-in-an-unwind-.patch)
 if [ $_patchlevel -gt 000 ]; then
   for (( p=1; p<=$((10#${_patchlevel})); p++ )); do
     source=(${source[@]} https://ftp.gnu.org/gnu/bash/bash-${_basever}-patches/bash${_basever//./}-$(printf "%03d" $p){,.sig})
@@ -55,6 +73,34 @@ prepare() {
   patch -p1 -i ${srcdir}/0005-bash-4.3-msys2-fix-lineendings.patch
   patch -p1 -i ${srcdir}/0006-bash-4.3-add-pwd-W-option.patch
   patch -p1 -i ${srcdir}/0007-fix-static-build.patch
+
+  # Cygwin spawnve() fast path: skip fork()+execve() for synchronous
+  # external commands in favor of CreateProcess() via spawnve().  This
+  # is the work tracked in the bash-spawnve-fast-path topic; see the
+  # individual patch headers for details and benchmark numbers.
+  for p in \
+    0008-jobs-add-register_spawned_child-for-non-fork-child-r.patch \
+    0009-execute_cmd-spawnve-fast-path-for-synchronous-extern.patch \
+    0010-builtins-implement-expr.patch \
+    0011-tests-cover-the-expr-builtin.patch \
+    0012-execute_cmd-handle-simple-redirections-in-the-spawnv.patch \
+    0013-execute_cmd-handle-pipeline-stages-in-the-spawnve-fa.patch \
+    0014-execute_cmd-factor-out-shared-expand-resolve-helpers.patch \
+    0015-execute_cmd-bypass-the-early-fork-in-pipeline-stages.patch \
+    0016-execute_cmd-support-no-expansion-heredocs-in-the-spa.patch \
+    0017-execute_cmd-extract-reusable-scanner-for-unsafe-word.patch \
+    0018-execute_cmd-support-expanding-heredocs-whose-body-is.patch \
+    0019-execute_cmd-support-async-commands-in-the-spawnve-fa.patch \
+    0020-execute_cmd-distinguish-fast-path-declined-from-redi.patch \
+    0021-execute_cmd-support-here-strings-word-in-the-spawnve.patch \
+    0022-execute_cmd-remove-dead-REDIRECT_BOTH-bail-out-from-.patch \
+    0023-execute_cmd-lift-fd-3-redirect-restriction-in-the-sp.patch \
+    0024-execute_cmd-bail-to-fork-path-for-interactive-async-.patch \
+    0025-execute_cmd-wrap-the-spawnve-fast-path-in-an-unwind-.patch
+  do
+    msg "applying patch $p"
+    patch -p1 -i ${srcdir}/$p
+  done
 
   autoconf
 }
@@ -149,6 +195,24 @@ sha256sums=('0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba'
             '3c33be8d7363b00189309353f3fcdedfb7c7082c4a1cedbcc76a36fd0a8af8a8'
             'e123c1ef06499405f055d6c920cf267258d7ab3d59d6036e1ee2b5b0edd81ad2'
             'f70394dfe8afd8be94a8358732c4e55b4af069cb40555d1375f2dadee7554797'
+            '7124e36ac60b285146a5b14264dff7d16308cc3e3bd2156eb4a4552adc43653d'
+            'e06cec5f663074610c16807aa296b4b45b13cc2de7eb15b6d239e3b41aa710b6'
+            'f8a006626cc9a72606a042e2b5641f8e62e0c53226b78ac932e40a17d57a1944'
+            '881e065d890d56b3daed71b5c605ca3189bbc45f2820b65254f30da8d1217a4e'
+            '5d8557466d2f1dfef9ef2fa275701f8080db75700d6c8d204a6a6c0f72886864'
+            'dd7fbc7901c3074b58ef27c3b194ed4e72fe2dc2dae0b353e03927b95ee00fd8'
+            'ad8aad465d5f31d2fb0872ee5684b284d678add13b99b8d1a69637ffcc541e4b'
+            'f0c283c8eee4db61c1e974ea39e53b0f74b3ba7406efa81dabd5964f606e6c76'
+            '5a52b12d8c9822805490cda22c2bde9e13e2d286369882c3d981ec50267f8226'
+            '7b8e286de0bd64d6b53beee84e167babb55de70ea7d5c3915ac2be7eafc8bc3e'
+            'f528b03a150beea79170a97e3e1b8a89a5891f3cbd7ef549aab28d25032de4c2'
+            '2a05b8aab27c29ad1555ccd141ca168b46b52deb2d71044a232f83aef9bede2a'
+            'eb564bfe7ee470c98f4fd75050749ea0bc51bb05030e1523bb1594f724771cd2'
+            '10efcf3a1d0220f0aa0bfbbe16a15f55377d9ba9b99ffd1a098cf652b2a94b96'
+            '276ba11e09a6e6ff316f60dbde381082de8138485d521fb3bafd989b3e917d33'
+            'b88ac336ac5fe8fb2ec5be7f6b56bea0e60d5ab732a29308f588af63a037a5e0'
+            '6dd9f5aaeff9df787b4279f9b4f5349bb1e2f3a3c3ca4fbd29ddddd7b403389b'
+            'c934608db7276c61a20d9b93973561c01257fdfc0501decf3b36c8e415e29191'
             '1f608434364af86b9b45c8b0ea3fb3b165fb830d27697e6cdfc7ac17dee3287f'
             'SKIP'
             'e385548a00130765ec7938a56fbdca52447ab41fabc95a25f19ade527e282001'

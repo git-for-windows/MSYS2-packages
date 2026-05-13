@@ -1,0 +1,240 @@
+From af1ed5bbc953c5ede73b4aa8a19e70b556d1eaf7 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 5 May 2026 10:14:22 +0200
+Subject: [PATCH 09/25] execute_cmd: spawnve() fast path for synchronous
+ external commands
+
+On Cygwin (and therefore MSYS2, on which Git for Windows is built),
+fork() must emulate POSIX copy-on-write semantics by snapshotting the
+parent's address space.  This is by far the most expensive part of
+spawning a child process; an empirical microbenchmark shows ~30ms per
+fork()+execve() versus ~14ms per spawnve(), and 200 sequential
+externals from bash take ~7.5s with the unmodified bash versus ~3.4s
+with this patch -- a 2.2-2.5x speedup that compounds heavily over a
+full Git test run, where each test_expect_success goes through dozens
+of cheap externals like /usr/bin/true.
+
+Add a fast path in execute_disk_command that bypasses fork()+execve()
+when the command is a plain external program with no pipes, no
+redirections, no async, no CMD_NO_FORK, and no fds_to_close.  In that
+case we call spawnve(_P_NOWAIT) instead, which lowers to
+CreateProcess() directly on Windows.
+
+The helper does not replace bash's job-tracking machinery; it only
+substitutes for the fork()+execve() pair.  The flow mirrors what
+make_child does on the parent side:
+
+  - block SIGCHLD/SIGINT/SIGTERM so a child that exits before we
+    have registered it cannot race waitchld()
+  - call making_children() so wait_for() will engage
+  - spawnve(_P_NOWAIT, ...) -- the returned pid is a real Cygwin pid
+    visible to waitpid(), not a Windows pid
+  - register_spawned_child() to set last_made_pid, add_process(),
+    setpgid() and bump the bookkeeping counters that make_child would
+    have updated
+  - restore the signal mask so the (possibly already-pending) SIGCHLD
+    is delivered now
+
+The caller's existing
+
+    if (already_making_children && pipe_out == NO_PIPE)
+        wait_for (last_made_pid, 0);
+
+path then runs unchanged, so $?, ERR trap, set -e, command
+substitution, PIPESTATUS-for-the-trivial-case and friends keep
+working exactly as for forked children.  When fast_spawn_command
+returns -1 (any of the unsupported conditions, or a spawnve()
+failure) we fall through to make_child() with no observable change.
+
+Why _P_NOWAIT and not _P_WAIT.  spawnve(_P_WAIT) is tempting because
+it returns the child's exit status directly, but it bypasses
+wait_for()/waitchld()/stop_pipeline() and the PIPESTATUS / ERR-trap
+machinery; it also cannot represent exit-by-signal accurately (only
+the low byte fits in the 0..255 return value).  Using _P_NOWAIT plus
+a real registered pid lets bash treat the spawned child as
+indistinguishable from a forked one.
+
+Why these particular conditions are excluded.  Pipes and
+redirections require fd surgery that the regular path does in the
+post-fork child; supporting them on the spawn path means
+pre-arranging the fds in the parent and then restoring them, which
+is straightforward but deserves its own commit.  Async (`&`) needs
+slightly different bookkeeping (the child's pid becomes
+$LAST_BACKGROUND_PID and is added to the asynchronous-jobs list).
+CMD_NO_FORK means the caller intends to skip the fork entirely and
+exec in place, which we obviously cannot match with spawnve().
+fds_to_close is the bitmap of pipe fds inherited from an enclosing
+pipeline that the child must not see; the regular path closes them
+in the child after fork, but a spawned child inherits all open fds
+without that hook.  All of these are addressable in follow-up
+commits.
+
+One ownership detail worth flagging for future maintainers, since it
+cost a long debugging session here: strvec_from_word_list (words,
+alloc, ...) returns an argv whose entries alias the WORD_LIST's
+strings when alloc==0.  That is fine for the regular path because
+the alloc==0 callers run in the post-fork child where the
+subsequent execve() makes any double-free moot.  fast_spawn_command
+runs in the parent, so we must pass alloc=1 to get a deeply-copied
+argv; otherwise strvec_dispose(args) would free strings still owned
+by `words`, and the immediately following dispose_words(words) at
+parent_return would double-free them.  The crash this caused
+(SIGABRT inside dispose_words, several stack frames deep into the
+malloc arena's consistency check) is what forced us to discover
+this contract.  Vanilla bash has no in-tree caller of
+strvec_from_word_list with alloc=1 plus parent-side disposal, so
+the convention had not previously been documented anywhere.
+
+Future commits will extend the fast path to redirections (handled
+in the parent before the spawn, with the original fds saved and
+restored around the spawnve call), pipeline stages (pipe_in /
+pipe_out plumbed through the fd-surgery logic), and async (`&`,
+which already has _P_NOWAIT pid handling but needs the
+asynchronous-jobs hookup).
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 111 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 111 insertions(+)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 070f511..c4bfcf3 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -180,6 +180,12 @@ static void execute_subshell_builtin_or_function (WORD_LIST *, REDIRECT *,
+ static int execute_disk_command (WORD_LIST *, REDIRECT *, char *,
+ 				      int, int, int, struct fd_bitmap *, int);
+ 
++#ifdef __CYGWIN__
++static pid_t fast_spawn_command (char *, WORD_LIST *, REDIRECT *,
++					char *, int, int, int,
++					struct fd_bitmap *, int);
++#endif
++
+ static char *getinterp (char *, int, int *);
+ static void initialize_subshell (void);
+ static int execute_in_subshell (COMMAND *, int, int, int, struct fd_bitmap *);
+@@ -5831,7 +5837,26 @@ execute_disk_command (WORD_LIST *words, REDIRECT *redirects, char *command_line,
+   else
+     {
+       fork_flags = async ? FORK_ASYNC : 0;
++#ifdef __CYGWIN__
++      /* Try the MSYS2/Cygwin spawnv() fast path before falling back to
++	 fork()+execve().  spawnv() reaches CreateProcess directly, which
++	 is roughly twice as fast as the POSIX-emulated fork.  When the
++	 helper succeeds it returns the new child's pid, registers it in
++	 the job table, and we continue down the normal parent path so
++	 that wait_for() reaps the child as usual.  If the helper cannot
++	 handle the command (pipes, redirections, ...) it returns -1 and
++	 we fall through to make_child below. */
++      pid = (command != 0)
++	      ? fast_spawn_command (command, words, redirects,
++				    command_line, pipe_in,
++				    pipe_out, async, fds_to_close,
++				    cmdflags)
++	      : (pid_t)-1;
++      if (pid < 0)
++	pid = make_child (p = savestring (command_line), fork_flags);
++#else
+       pid = make_child (p = savestring (command_line), fork_flags);
++#endif /* __CYGWIN__ */
+     }
+ 
+   if (pid == 0)
+@@ -5948,6 +5973,92 @@ parent_return:
+     }
+ }
+ 
++#ifdef __CYGWIN__
++#include <process.h>		/* spawnve, _P_NOWAIT */
++
++/* MSYS2/Cygwin fast path for execute_disk_command.  Uses spawnve() to
++   create the child process, which goes straight to CreateProcess() on
++   Windows.  This is roughly twice as fast as fork()+execve() because
++   Cygwin's fork() must emulate POSIX copy-on-write semantics by
++   snapshotting the parent's address space.
++
++   On success returns the pid of the new child, which has been registered
++   in the job table so that the caller's normal wait_for(last_made_pid)
++   path will reap it.  Returns -1 if the command cannot be handled by the
++   fast path (pipes, redirections, async, CMD_NO_FORK, fds_to_close), in
++   which case the caller must fall back to make_child().
++
++   Currently this only handles the simple synchronous case with no pipes
++   and no redirections.  Other cases will be added incrementally. */
++static pid_t
++fast_spawn_command (char *command, WORD_LIST *words,
++		    REDIRECT *redirects, char *command_line,
++		    int pipe_in, int pipe_out, int async,
++		    struct fd_bitmap *fds_to_close, int cmdflags)
++{
++  char **args;
++  pid_t pid;
++  sigset_t set, oset;
++  int fork_flags;
++
++  /* Conditions we don't yet handle.  Bail out and let make_child do it. */
++  if (pipe_in != NO_PIPE || pipe_out != NO_PIPE)
++    return (pid_t)-1;
++  if (redirects)
++    return (pid_t)-1;
++  if (async)
++    return (pid_t)-1;
++  if (cmdflags & CMD_NO_FORK)
++    return (pid_t)-1;
++
++  /* If there are inherited pipe fds that the child must not see,
++     fall back; the regular path closes them in the child after fork. */
++  if (fds_to_close)
++    {
++      int i;
++      for (i = 0; i < fds_to_close->size; i++)
++	if (fds_to_close->bitmap[i])
++	  return (pid_t)-1;
++    }
++
++  /* Mirror make_child's signal blocking around the spawn so that SIGCHLD
++     for the new child is held until we have registered it in the job
++     table.  Otherwise waitchld() could fire before add_process(). */
++  sigemptyset (&set);
++  sigaddset (&set, SIGCHLD);
++  sigaddset (&set, SIGINT);
++  sigaddset (&set, SIGTERM);
++  sigemptyset (&oset);
++  sigprocmask (SIG_BLOCK, &set, &oset);
++
++  making_children ();
++
++  args = strvec_from_word_list (words, 1, 0, (int *)NULL);
++
++  pid = spawnve (_P_NOWAIT, command, (const char * const *)args,
++		 (const char * const *)export_env);
++
++  strvec_dispose (args);
++
++  if (pid < 0)
++    {
++      /* spawnve failed; restore signals and fall back to fork+exec. */
++      sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++      return (pid_t)-1;
++    }
++
++  fork_flags = async ? FORK_ASYNC : 0;
++  register_spawned_child (pid, savestring (command_line), fork_flags);
++
++  /* Unblock signals now that the child is registered; a pending SIGCHLD
++     will be delivered and waitchld() will find the child in the job
++     table just as it would for a forked one. */
++  sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++
++  return pid;
++}
++#endif /* __CYGWIN__ */
++
+ /* CPP defines to decide whether a particular index into the #! line
+    corresponds to a valid interpreter name or argument character, or
+    whitespace.  The MSDOS define is to allow \r to be treated the same
+-- 
+2.53.0.windows.1
+

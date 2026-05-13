@@ -1,0 +1,87 @@
+From afb062ee234565e618255ee44680ec15b8b17e43 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Sun, 10 May 2026 11:56:46 +0200
+Subject: [PATCH 19/25] execute_cmd: support async commands in the spawnve fast
+ path
+
+Drop the two `if (async) return -1' bail-outs (in fast_spawn_command
+and try_fast_simple_spawn).  spawnve(_P_NOWAIT) returns immediately
+without waiting for the child, which is exactly what async semantics
+require, and register_spawned_child already handles FORK_ASYNC by
+setting last_asynchronous_pid (so `$!' works).  No new code path
+needed; we only have to stop refusing.
+
+Microbenchmark wins (200 iterations, warm avg, vs distro bash):
+
+  workload                                distro    patched   speedup
+  --------------------------------------- --------  --------  -------
+  /usr/bin/true & wait $!                 7.96s     3.13s     2.54x
+  /usr/bin/true | /usr/bin/cat & wait $!  11.68s    6.92s     1.69x
+
+Out of scope for this commit, with rationale:
+
+  - setup_async_signals() makes the post-fork child ignore SIGINT
+    and SIGQUIT so an interactive Ctrl-C does not kill background
+    jobs.  In the fork path it runs after fork in the child; we
+    have no such hook with spawnve, and Cygwin's spawnve does not
+    accept a sigmask attribute.  For non-interactive bash (test
+    scripts and the Git test suite generally) this does not matter:
+    SIGINT is not delivered.  An interactive shell that backgrounds
+    a command which then needs to survive Ctrl-C would observe a
+    behavior change here -- but interactive job-control already has
+    the setpgid-race caveat documented in the pipeline commit, so
+    the same target audience.
+
+  - async_redirect_stdin() redirects fd 0 to /dev/null when the
+    async command has no explicit stdin redirect and `lithist' is
+    set (CMD_STDIN_REDIR).  This prevents async commands from
+    stealing the parent's stdin in interactive shells.  Same
+    rationale: test scripts do not exercise this; documented as
+    follow-up work.
+
+Both gaps are addressable -- the stdin redirect can be done as one
+more parent-side dup2/restore around spawnve, similarly to pipeline
+fd surgery, and the SIGINT-ignore could be approximated by wrapping
+spawnve with a temporary signal mask.  Deferred.
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index d2abbe4..c01e920 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -6258,8 +6258,6 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   int i;
+ 
+   /* Conditions we don't yet handle.  Bail out and let make_child do it. */
+-  if (async)
+-    return (pid_t)-1;
+   if (cmdflags & CMD_NO_FORK)
+     return (pid_t)-1;
+   if (pipe_out == REDIRECT_BOTH)
+@@ -6469,8 +6467,6 @@ pipe_setup_fail:
+    never has to pay the fork() cost in the parent.
+ 
+    Eligibility (intentionally conservative for an initial cut):
+-     - synchronous (async commands have a different bookkeeping regime
+-       in execute_simple_command);
+      - no W_ASSIGNMENT words (would mutate parent shell state);
+      - no `${', `$(' or backticks anywhere in the literal words
+        (parameter-expansion-with-side-effects, command substitution,
+@@ -6488,9 +6484,6 @@ try_fast_simple_spawn (SIMPLE_COM *simple_command,
+   char *command_line = NULL;
+   pid_t pid;
+ 
+-  if (async)
+-    return (pid_t)-1;
+-
+   for (w = simple_command->words; w; w = w->next)
+     {
+       const char *s;
+-- 
+2.53.0.windows.1
+

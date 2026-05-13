@@ -1,0 +1,306 @@
+From 52314b9f77d913fbf436f836a8ec2eba75a523ac Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Wed, 6 May 2026 15:58:43 +0200
+Subject: [PATCH 12/25] execute_cmd: handle simple redirections in the spawnve
+ fast path
+
+Extend fast_spawn_command to apply a restricted-but-common subset of
+shell redirections (>file, <file, >>file, >|file, &>file, &>>file, <>file,
+<&N, >&N, <&-, >&-) on fd 0/1/2 in the parent process before spawnve()
+and undo them afterwards.  The fork-path applies redirections in the
+post-fork child where the kernel has given it a private fd table; we
+have no such luxury, so we lean on bash's existing RX_UNDOABLE machinery
+to capture inverse operations and replay them via cleanup_redirects()
+after the child has been spawned and inherited the redirected fds.
+
+A microbenchmark of 200 sequential externals each doing
+`>/dev/null 2>&1` drops from ~8.0s to ~3.2s -- the same 2.4x speedup
+the simple synchronous case enjoys.  This was the hot case: the previous
+fast path bailed out on any redirect, so the test-suite-typical pattern
+of `cmd >/dev/null 2>&1` could not benefit.  t/t1022-read-tree-partial-
+clone.sh, with the case-patch in test-lib-functions.sh reverted to the
+upstream `expr` call, runs in ~2.6s with the full fast path versus ~2.7s
+with the no-redirect variant.
+
+The redirect set we accept is deliberately conservative.  Three classes
+of hazards informed the per-redirect filter:
+
+  - REDIR_VARASSIGN (the {var}<file form) binds a shell variable in the
+    current process; the regular path performs that mutation in the
+    child where it disappears with it.  Performing it in the parent
+    would leak a variable assignment.  Bail out.
+
+  - Redirector fds >= 3.  do_redirections, when given RX_UNDOABLE, dups
+    the original fd into a save fd before applying the redirect.  For
+    fd 0/1/2 the save fd is forced close-on-exec; for higher fds it is
+    not unconditionally so, and the spawned child can inherit a stray
+    handle.  The fix would be to walk the new undo list and force
+    FD_CLOEXEC on each save fd before spawnve; this is more invasive
+    than this initial cut warrants.  Bail out for fd >= 3 instead.
+
+  - Process substitution (<(cmd), >(cmd)).  redirection_expand performs
+    word expansion which can call process_substitute, which itself calls
+    make_child to fork off the substitution helper.  In the parent that
+    helper would become a child of the main shell rather than of the
+    (would-be) forked external command, with substantial follow-on
+    bookkeeping for procsub tracking, FIFO/dev-fd lifetime and SIGCHLD
+    delivery (which is currently blocked when the helper would be
+    forked).  Detect process substitution by the leading `<(' / `>('
+    of the redirectee word and bail out.
+
+The list of supported r_instruction values is restricted to filename
+redirections (r_input_direction, r_output_direction, r_appending_to,
+r_input_output, r_output_force, r_err_and_out, r_append_err_and_out)
+and constant-fd duplications and closes (r_duplicating_input,
+r_duplicating_output, r_close_this).  Word-form duplications
+(r_duplicating_input_word, r_duplicating_output_word) and the four
+move-fd instructions are excluded; they involve word expansion or
+reorder fds in ways the simple save/restore protocol does not handle.
+Heredocs and here-strings are also excluded; they allocate temp files
+that on a crash between do_redirections and cleanup_redirects could
+leak.
+
+Two undo-list globals require save-and-restore, not just one:
+redirection_undo_list (the parent-side fd-restoration list) and
+exec_redirection_undo_list (used by `exec >file` to commit redirections
+across an exec).  do_redirections under RX_UNDOABLE disposes of any
+existing list in either global at entry, so the caller's pending undos
+must be moved to local variables before the call and restored
+afterwards.  exec_redirection_undo_list is then disposed (not applied)
+because we are not exec'ing in the parent; only the (regular)
+redirection_undo_list is replayed.
+
+On do_redirections failure we undo whatever it managed to apply and
+return -1, leaving the caller to fall back to make_child.  The error
+message is then printed twice (once from our parent-side attempt,
+once from the post-fork child's attempt) but the observable exit
+status is correct.  This is acceptable for now and noted as future
+work; a cleaner separation would require a sentinel return value
+distinguishing "unsupported, please fall back" from "handled,
+redirection failed -- do not fall back".
+
+Three further follow-ups remain:
+  - unwind-protect around the parent-redirection window so an interrupt
+    or trap during do_redirections cannot leave the parent with
+    half-applied redirections, corrupted undo-list globals or a
+    permanently blocked signal mask;
+  - lift the fd >= 3 restriction by walking the new undo list and
+    setting FD_CLOEXEC on each save fd before spawnve;
+  - heredoc support (the temp-file lifetime concern is mostly about
+    cleanup on crash; the happy path is already correct).
+
+The rubber-duck pass surfaced all five blocking hazards above before
+the first build attempt, which saved a debugging session.
+
+Assisted-by: Claude Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 149 +++++++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 141 insertions(+), 8 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index c4bfcf3..3d7e417 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -5976,6 +5976,78 @@ parent_return:
+ #ifdef __CYGWIN__
+ #include <process.h>		/* spawnve, _P_NOWAIT */
+ 
++/* Decide whether a single redirect can safely be applied in the parent
++   process before spawnve() and undone afterwards.  See the long comment
++   on fast_spawn_redirect_supported below for the criteria. */
++static int
++fast_spawn_redirect_one_supported (REDIRECT *r)
++{
++  /* Variable-assignment redirects ({var}<file) bind a shell variable;
++     in the regular path that mutation happens in the post-fork child
++     and disappears with it.  We must not perform that mutation in the
++     parent. */
++  if (r->rflags & REDIR_VARASSIGN)
++    return 0;
++
++  /* Limit to file descriptors 0, 1 and 2.  add_undo_redirect() can leave
++     the parent-side save fd open across exec for higher fds, which would
++     leak into the spawned child.  Forcing close-on-exec on all save fds
++     before spawnve would close that gap, but is more invasive than this
++     initial cut warrants. */
++  if (r->redirector.dest < 0 || r->redirector.dest > 2)
++    return 0;
++
++  switch (r->instruction)
++    {
++    case r_input_direction:		/* <file */
++    case r_output_direction:		/* >file */
++    case r_appending_to:		/* >>file */
++    case r_input_output:		/* <>file */
++    case r_output_force:		/* >|file (noclobber bypass) */
++    case r_err_and_out:			/* &>file */
++    case r_append_err_and_out:		/* &>>file */
++      /* Filename redirections.  Detect process substitution (`<(cmd)`,
++	 `>(cmd)`) and bail; redirection_expand() would spawn the
++	 substitution children as children of the main shell rather than
++	 of the (would-be) forked external command, with substantial
++	 follow-on bookkeeping. */
++      if (r->redirectee.filename
++	  && r->redirectee.filename->word
++	  && (strncmp (r->redirectee.filename->word, "<(", 2) == 0
++	      || strncmp (r->redirectee.filename->word, ">(", 2) == 0))
++	return 0;
++      return 1;
++
++    case r_duplicating_input:		/* <&N (constant fd) */
++    case r_duplicating_output:		/* >&N (constant fd) */
++    case r_close_this:			/* <&-, >&- */
++      /* Constant-fd dup or close.  No expansion, no substitution, no
++	 mutation of parent state beyond fd-table changes that the undo
++	 list will reverse. */
++      return 1;
++
++    default:
++      /* Heredocs, here-strings, word-form fd duplications and the
++	 various move-fd instructions are intentionally excluded.  They
++	 either spawn helpers, allocate temp files, or perform word
++	 expansion that can have side effects. */
++      return 0;
++    }
++}
++
++/* Walk the redirect list and accept it only if every entry passes the
++   per-entry test above.  Returns non-zero if the whole list can be
++   handled in the parent by the fast path. */
++static int
++fast_spawn_redirect_supported (REDIRECT *list)
++{
++  REDIRECT *r;
++  for (r = list; r; r = r->next)
++    if (!fast_spawn_redirect_one_supported (r))
++      return 0;
++  return 1;
++}
++
+ /* MSYS2/Cygwin fast path for execute_disk_command.  Uses spawnve() to
+    create the child process, which goes straight to CreateProcess() on
+    Windows.  This is roughly twice as fast as fork()+execve() because
+@@ -5985,11 +6057,17 @@ parent_return:
+    On success returns the pid of the new child, which has been registered
+    in the job table so that the caller's normal wait_for(last_made_pid)
+    path will reap it.  Returns -1 if the command cannot be handled by the
+-   fast path (pipes, redirections, async, CMD_NO_FORK, fds_to_close), in
+-   which case the caller must fall back to make_child().
+-
+-   Currently this only handles the simple synchronous case with no pipes
+-   and no redirections.  Other cases will be added incrementally. */
++   fast path (pipes, async, CMD_NO_FORK, fds_to_close, or redirections
++   that fail the safety checks above), in which case the caller must
++   fall back to make_child().
++
++   When the redirection list is non-empty and fast_spawn_redirect_supported
++   accepts it, we apply the redirections in the parent (with
++   RX_UNDOABLE) before spawnve and replay the inverse ops afterwards
++   to restore the parent's fd table.  Both redirection_undo_list and
++   exec_redirection_undo_list are protocol-managed: they are saved on
++   entry, set to NULL across do_redirections (so the caller's existing
++   pending undos are not disposed), captured on success, and restored. */
+ static pid_t
+ fast_spawn_command (char *command, WORD_LIST *words,
+ 		    REDIRECT *redirects, char *command_line,
+@@ -6000,16 +6078,21 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   pid_t pid;
+   sigset_t set, oset;
+   int fork_flags;
++  REDIRECT *saved_undo_list = NULL;
++  REDIRECT *saved_exec_undo_list = NULL;
++  REDIRECT *new_undo_list = NULL;
++  REDIRECT *new_exec_undo_list = NULL;
++  int redirected = 0;
+ 
+   /* Conditions we don't yet handle.  Bail out and let make_child do it. */
+   if (pipe_in != NO_PIPE || pipe_out != NO_PIPE)
+     return (pid_t)-1;
+-  if (redirects)
+-    return (pid_t)-1;
+   if (async)
+     return (pid_t)-1;
+   if (cmdflags & CMD_NO_FORK)
+     return (pid_t)-1;
++  if (redirects && !fast_spawn_redirect_supported (redirects))
++    return (pid_t)-1;
+ 
+   /* If there are inherited pipe fds that the child must not see,
+      fall back; the regular path closes them in the child after fork. */
+@@ -6023,7 +6106,9 @@ fast_spawn_command (char *command, WORD_LIST *words,
+ 
+   /* Mirror make_child's signal blocking around the spawn so that SIGCHLD
+      for the new child is held until we have registered it in the job
+-     table.  Otherwise waitchld() could fire before add_process(). */
++     table.  Otherwise waitchld() could fire before add_process().  We
++     also block before applying redirections so that an ill-timed signal
++     can't leave the parent's fds half-rewritten if we have to bail. */
+   sigemptyset (&set);
+   sigaddset (&set, SIGCHLD);
+   sigaddset (&set, SIGINT);
+@@ -6031,6 +6116,43 @@ fast_spawn_command (char *command, WORD_LIST *words,
+   sigemptyset (&oset);
+   sigprocmask (SIG_BLOCK, &set, &oset);
+ 
++  /* Apply redirections in the parent.  The regular path does this in
++     the post-fork child where the fork has given it a private fd table;
++     we don't have that luxury, so we ask do_redirections for the undo
++     ops and replay them after spawnve to restore our fds.  We swap
++     both redirection_undo_list and exec_redirection_undo_list out for
++     private storage so any pre-existing pending undos owned by the
++     caller are preserved (do_redirections disposes of any list in
++     these globals at entry under RX_UNDOABLE). */
++  if (redirects)
++    {
++      saved_undo_list = redirection_undo_list;
++      saved_exec_undo_list = exec_redirection_undo_list;
++      redirection_undo_list = (REDIRECT *)NULL;
++      exec_redirection_undo_list = (REDIRECT *)NULL;
++
++      if (do_redirections (redirects, RX_ACTIVE | RX_UNDOABLE) != 0)
++	{
++	  /* Redirection failed; do_redirections has already printed an
++	     error and recorded inverse ops for whatever it managed to
++	     apply.  Roll those back, restore the caller's undo lists,
++	     unblock signals, and fall back to the fork path so the
++	     child fails the same way under the existing machinery. */
++	  cleanup_redirects (redirection_undo_list);
++	  dispose_redirects (exec_redirection_undo_list);
++	  redirection_undo_list = saved_undo_list;
++	  exec_redirection_undo_list = saved_exec_undo_list;
++	  sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++	  return (pid_t)-1;
++	}
++
++      new_undo_list = redirection_undo_list;
++      new_exec_undo_list = exec_redirection_undo_list;
++      redirection_undo_list = saved_undo_list;
++      exec_redirection_undo_list = saved_exec_undo_list;
++      redirected = 1;
++    }
++
+   making_children ();
+ 
+   args = strvec_from_word_list (words, 1, 0, (int *)NULL);
+@@ -6040,6 +6162,17 @@ fast_spawn_command (char *command, WORD_LIST *words,
+ 
+   strvec_dispose (args);
+ 
++  /* Restore the parent's fd table now that the child (which inherited
++     the redirected fds) is launched.  The exec-undo entries we built
++     are no longer needed; dispose them rather than apply them, since
++     they only matter when the parent is going to exec() (i.e. the
++     `exec >file' builtin path), which is not our case. */
++  if (redirected)
++    {
++      cleanup_redirects (new_undo_list);
++      dispose_redirects (new_exec_undo_list);
++    }
++
+   if (pid < 0)
+     {
+       /* spawnve failed; restore signals and fall back to fork+exec. */
+-- 
+2.53.0.windows.1
+
