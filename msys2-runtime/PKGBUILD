@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.9
-pkgrel=1
+pkgrel=2
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -74,9 +74,10 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0044-Make-paths-WCS-MBS-conversion-explicit.patch
         0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch
         0046-Change-the-default-base-address-for-x86_64.patch
-        0047-Add-AGENTS.md-with-comprehensive-project-context-for.patch)
+        0047-cygcheck-remove-an-unused-variable-causing-a-build-e.patch
+        0048-Cygwin-console-fix-deadlock-in-pcon-teardown.patch)
 sha256sums=('62562487acda0232669c7bc0f216fd8b5bef85dabde87dfbf1cd52a092a7c6ac'
-            '9f019c8da8847306ca9e076b763191ab162d63beb67a0efbc1cf5b5bda31c57c'
+            '2e29685a5e1b565600b4c82b97c4f1ab5efdaefa5cf90683b50fda79db41476d'
             'eae9773ed4d226f1938aceb4e0f25047ff3844758677a2c0f8a8b98bd7701015'
             'ed02e5bd61ac289e8c28c921bd71c7fa1a84f551a7f148ef622c51e06a49de51'
             '0ee828e4e50cbe51d3fbdfa79d84224c3a78b1fff09bac8daf3cd6ee7ee2c75a'
@@ -123,7 +124,8 @@ sha256sums=('62562487acda0232669c7bc0f216fd8b5bef85dabde87dfbf1cd52a092a7c6ac'
             '072e5adf9fcbe1fc2f9ece033313722fb6bd57245952d3899096bb102031223a'
             '5e308c805e5e3f9bec90af92530303d2b2da53cd9785983ace008c66b753ba7a'
             '20cc05494fbc18452f3424e8797b314d49ee6c158849958bc767ecfcdba69284'
-            '0a383e020ca6625e25a9f62477749ad6b48b3b8cb87e40b20cb25aa31d5dfc51')
+            '3f981cf9d27787fa19d93744874a7a506882cf76a46e1a728c280d854e3c9df5'
+            '8ef1645231e0469292a1bc89d9f617e60408d544595845cc01bc8718c3ef6668')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -225,7 +227,8 @@ prepare() {
   0044-Make-paths-WCS-MBS-conversion-explicit.patch \
   0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
   0046-Change-the-default-base-address-for-x86_64.patch \
-  0047-Add-AGENTS.md-with-comprehensive-project-context-for.patch
+  0047-cygcheck-remove-an-unused-variable-causing-a-build-e.patch \
+  0048-Cygwin-console-fix-deadlock-in-pcon-teardown.patch
 }
 
 build() {
