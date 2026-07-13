@@ -1,0 +1,109 @@
+From 231c43b660afdcdc8b09557204683fbd0c70f2cb Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Wed, 10 Jun 2026 23:42:27 +0900
+Subject: [PATCH 55/N] Cygwin: console: Fix NOFLSH behaviour a bit
+
+If you run "stty noflsh; cat" in "bash", and stop "cat" by Ctrl-C,
+a stray ^C is passed to "bash". The current code calls tcflush() if
+NOFLSH is not set, however, tcflush() is not called when NOFLSH is
+set. So, Ctrl-C remains in console input buffer. This should be
+discarded even in NOFLSH mode. This patch introduces a helper
+function discard_key_events() and call it to erase Ctrl-C in the
+console input buffer.
+
+Note that even with this patch, NOFLSH is not fully functional in
+console because the readahead buffer is unique to process, so it
+cannot be inherited to other processes. However, it should work
+intra process.
+
+Fixes: 118e51be1d04 ("(tty_min::kill_pgrp): Handle tty flush when signal detected.")
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Mark Geisert <mark@maxrnd.com>
+(cherry picked from commit 66324edf64a9ef0672e445c870b5a38c091f7b38)
+(cherry picked from commit 56dfa4db988c89ce9d216541e683cf65a294d8eb)
+---
+ winsup/cygwin/fhandler/console.cc       | 20 +++++++++++++++++---
+ winsup/cygwin/fhandler/termios.cc       | 10 +++++++---
+ winsup/cygwin/local_includes/fhandler.h |  2 ++
+ 3 files changed, 26 insertions(+), 6 deletions(-)
+
+diff --git a/winsup/cygwin/fhandler/console.cc b/winsup/cygwin/fhandler/console.cc
+index 5a5e64d..7c14ad2 100644
+--- a/winsup/cygwin/fhandler/console.cc
++++ b/winsup/cygwin/fhandler/console.cc
+@@ -1679,17 +1679,31 @@ out:
+     discard_len = 0;
+   if (discard_len)
+     {
+-      DWORD discarded;
+       acquire_attach_mutex (mutex_timeout);
+       DWORD resume_pid = attach_console (con.owner);
+-      ReadConsoleInputW (get_handle (), input_rec, discard_len, &discarded);
++      discard_key_events (discard_len);
+       detach_console (resume_pid, con.owner);
+       release_attach_mutex ();
+-      con.num_processed -= min (con.num_processed, discarded);
+     }
+   return stat;
+ }
+ 
++void
++fhandler_console::discard_key_events (size_t n)
++{
++  DWORD discarded = 0;
++  INPUT_RECORD input_rec[INREC_SIZE];
++  DWORD n1 = min (INREC_SIZE, n);
++  while (n)
++    {
++      ReadConsoleInputW (get_handle (), input_rec, n1, &n1);
++      n -= n1;
++      discarded += n1;
++      n1 = min (INREC_SIZE, n);
++    }
++  con.num_processed -= min (con.num_processed, discarded);
++}
++
+ bool
+ dev_console::fillin (HANDLE h)
+ {
+diff --git a/winsup/cygwin/fhandler/termios.cc b/winsup/cygwin/fhandler/termios.cc
+index e2822c3..6508078 100644
+--- a/winsup/cygwin/fhandler/termios.cc
++++ b/winsup/cygwin/fhandler/termios.cc
+@@ -666,9 +666,13 @@ fhandler_termios::sigflush ()
+      be NULL while this is alive.  However, we can conceivably close a
+      ctty while exiting and that will zero this. */
+   if ((!have_execed || have_execed_cygwin) && tc ()
+-      && (tc ()->getpgid () == myself->pgid)
+-      && !(tc ()->ti.c_lflag & NOFLSH))
+-    tcflush (TCIFLUSH);
++      && (tc ()->getpgid () == myself->pgid))
++    {
++      if (!(tc ()->ti.c_lflag & NOFLSH))
++	tcflush (TCIFLUSH);
++      else
++	discard_key_events (1);
++    }
+ }
+ 
+ pid_t
+diff --git a/winsup/cygwin/local_includes/fhandler.h b/winsup/cygwin/local_includes/fhandler.h
+index 3a4bfac..1abc2ec 100644
+--- a/winsup/cygwin/local_includes/fhandler.h
++++ b/winsup/cygwin/local_includes/fhandler.h
+@@ -1982,6 +1982,7 @@ class fhandler_termios: public fhandler_base
+   virtual off_t lseek (off_t, int);
+   pid_t tcgetsid ();
+   virtual int fstat (struct stat *buf);
++  virtual void discard_key_events (size_t n) {}
+ 
+   fhandler_termios (void *) {}
+ 
+@@ -2360,6 +2361,7 @@ private:
+   void wpbuf_put (char c);
+   void wpbuf_send ();
+   int fstat (struct stat *buf);
++  void discard_key_events (size_t n);
+ 
+   class console_unit
+   {

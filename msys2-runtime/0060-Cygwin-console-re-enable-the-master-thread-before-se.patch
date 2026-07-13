@@ -1,0 +1,74 @@
+From ee50bdd7ad8ac4f6383b05266773c5d68b2327b1 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 30 Jun 2026 20:47:23 +0900
+Subject: [PATCH 60/N] Cygwin: console: re-enable the master thread before
+ selecting cygwin input mode
+
+When a cygwin program and a non-cygwin program run in the same foreground
+process group (for example the pipeline `cat | ping`), Ctrl-C stopped
+interrupting the cygwin program after "Cygwin: console: Ensure the master
+thread runs only when it is supposed to".
+
+The console only delivers Ctrl-C as a raw 0x03 byte (which the console
+master thread reads and turns into a SIGINT for the foreground process
+group) while that thread is live. When it is suspended or disabled,
+set_input_mode (tty::cygwin) instead requests ENABLE_PROCESSED_INPUT, so
+the console raises a CTRL_C_EVENT and the 0x03 byte never reaches the
+master thread. The referenced commit reordered the two enable paths,
+bg_check () and post_open_setup (), so that set_input_mode (tty::cygwin)
+runs while disable_master_thread is still set; that leaves
+ENABLE_PROCESSED_INPUT on and the cygwin program never receives its SIGINT.
+
+Clear disable_master_thread before selecting cygwin input mode in those two
+paths, so the mode is configured with the master thread already live and
+ENABLE_PROCESSED_INPUT stays off. The disable paths and the synchronous
+suspension that the referenced commit added are left unchanged, so
+non-cygwin programs still get the master thread reliably suspended.
+
+Fixes: 733d5a953fa9 ("Cygwin: console: Ensure the master thread runs only when it is supposed to")
+Assisted-by: Opus 4.8
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Co-Authored-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+---
+ winsup/cygwin/fhandler/console.cc | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/winsup/cygwin/fhandler/console.cc b/winsup/cygwin/fhandler/console.cc
+index 0136652..63ffbdc 100644
+--- a/winsup/cygwin/fhandler/console.cc
++++ b/winsup/cygwin/fhandler/console.cc
+@@ -949,12 +949,12 @@ fhandler_console::cleanup_for_non_cygwin_app (handle_set_t *p)
+   termios *ti = shared_console_info[unit] ?
+     &(shared_console_info[unit]->tty_min_state.ti) : &dummy;
+   /* Cleaning-up console mode for non-cygwin app. */
++  set_disable_master_thread (con.owner == GetCurrentProcessId ());
+   /* conmode can be tty::restore when non-cygwin app is
+      exec'ed from login shell. */
+   tty::cons_mode conmode = cons_mode_on_close (p);
+   set_output_mode (conmode, ti, p);
+   set_input_mode (conmode, ti, p);
+-  set_disable_master_thread (con.owner == GetCurrentProcessId ());
+ }
+ 
+ /* Return the tty structure associated with a given tty number.  If the
+@@ -1147,8 +1147,8 @@ fhandler_console::bg_check (int sig, bool dontsignal)
+      in the same process group. */
+   if (sig == SIGTTIN && con.curr_input_mode != tty::cygwin)
+     {
+-      set_input_mode (tty::cygwin, &tc ()->ti, get_handle_set ());
+       set_disable_master_thread (false, this);
++      set_input_mode (tty::cygwin, &tc ()->ti, get_handle_set ());
+     }
+   if (sig == SIGTTOU && con.curr_output_mode != tty::cygwin)
+     set_output_mode (tty::cygwin, &tc ()->ti, get_handle_set ());
+@@ -2035,8 +2035,8 @@ fhandler_console::post_open_setup (int fd)
+   /* Setting-up console mode for cygwin app started from non-cygwin app. */
+   if (fd == 0)
+     {
+-      set_input_mode (tty::cygwin, &get_ttyp ()->ti, &handle_set);
+       set_disable_master_thread (false, this);
++      set_input_mode (tty::cygwin, &get_ttyp ()->ti, &handle_set);
+     }
+   else if (fd == 1 || fd == 2)
+     set_output_mode (tty::cygwin, &get_ttyp ()->ti, &handle_set);
