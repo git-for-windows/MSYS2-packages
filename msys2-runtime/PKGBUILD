@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.9
-pkgrel=2
+pkgrel=3
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -76,9 +76,28 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch
         0046-Change-the-default-base-address-for-x86_64.patch
         0047-cygcheck-remove-an-unused-variable-causing-a-build-e.patch
-        0048-Cygwin-console-fix-deadlock-in-pcon-teardown.patch)
+        0048-Cygwin-console-fix-deadlock-in-pcon-teardown.patch
+        0049-Cygwin-pty-Do-not-set-input_available_event-when-app.patch
+        0050-Cygwin-pty-Introduce-a-helper-function-get_handle_fr.patch
+        0051-Cygwin-pty-Prevent-unintended-conversion-for-cursor-.patch
+        0052-Cygwin-pty-Fix-race-issue-between-starting-and-exiti.patch
+        0053-Cygwin-pty-Treat-CR-NL-in-accept_input-the-same-as-i.patch
+        0054-Cygwin-console-Ensure-the-master-thread-runs-only-wh.patch
+        0055-Cygwin-console-Fix-NOFLSH-behaviour-a-bit.patch
+        0056-Cygwin-console-Fix-typeahead-input-for-bash.patch
+        0057-Cygwin-pty-detect-pcon-backed-pty-for-non-Cygwin-spa.patch
+        0058-Cygwin-pty-Discard-pcon-input-buffer-when-discard_in.patch
+        0059-Cygwin-pty-Fixup-pty-state-after-a-cygwin-app-exits.patch
+        0060-Cygwin-console-re-enable-the-master-thread-before-se.patch
+        0061-Cygwin-console-Correct-previous-NOFLSH-fix.patch
+        0062-Cygwin-pty-Do-not-transfer-input-to-nat-pipe-while-m.patch
+        0063-Cygwin-pty-Fix-nat_pipe_owner_pid-when-gdb-runs-non-.patch
+        0064-Cygwin-pty-grow-GetConsoleProcessList-buffer-in-find.patch
+        0065-Cygwin-pty-bound-the-cursor-sync-round-trip-so-an-ex.patch
+        0066-Cygwin-pty-do-not-leak-nat-handles-when-adopting-the.patch
+        0067-Cygwin-pty-validate-the-cursor-position-reply-before.patch)
 sha256sums=('62562487acda0232669c7bc0f216fd8b5bef85dabde87dfbf1cd52a092a7c6ac'
-            '2e29685a5e1b565600b4c82b97c4f1ab5efdaefa5cf90683b50fda79db41476d'
+            '9b3d738f7507a0aa8f1ed8ddf0285be310b9feb569fd5c4d23f5c984323b00d1'
             'eae9773ed4d226f1938aceb4e0f25047ff3844758677a2c0f8a8b98bd7701015'
             'ed02e5bd61ac289e8c28c921bd71c7fa1a84f551a7f148ef622c51e06a49de51'
             '0ee828e4e50cbe51d3fbdfa79d84224c3a78b1fff09bac8daf3cd6ee7ee2c75a'
@@ -126,7 +145,26 @@ sha256sums=('62562487acda0232669c7bc0f216fd8b5bef85dabde87dfbf1cd52a092a7c6ac'
             '5e308c805e5e3f9bec90af92530303d2b2da53cd9785983ace008c66b753ba7a'
             '20cc05494fbc18452f3424e8797b314d49ee6c158849958bc767ecfcdba69284'
             '3f981cf9d27787fa19d93744874a7a506882cf76a46e1a728c280d854e3c9df5'
-            '8ef1645231e0469292a1bc89d9f617e60408d544595845cc01bc8718c3ef6668')
+            '8ef1645231e0469292a1bc89d9f617e60408d544595845cc01bc8718c3ef6668'
+            'c77fdb75bb59d772725b94586638a0d9037b2fb14f67b68c0b28e2a578d35951'
+            '58cd8e388f50a59c566dc543bbeef438f0598ed425a6b9a252cb3cd87cb8ec44'
+            'e6d00e9362aefe3e5c6e2ffc9854c610133989f2ef95ec842232a0b565cdd624'
+            '53b1630b14d452e419adb915c8db2ea2ce309c3633ddb6b6bd039275b7a68e0d'
+            '4f8410ee10b4df4923ea8b2c872a9ec075d18474e1d368da651ca0a87fc6b504'
+            '4c718bc9b4847cab108435d33486af03a05a10c7ea128bc1d215c60035a793fc'
+            '4a64e47ce0cf6bd7b0a1fae3810d09cba71c5f3981f715070ade9de0e88d2797'
+            '3afa5db388eed6fc22e63d276a2f6ca6ec26b2d80e409397a0fa6f00e0f3bd6d'
+            'f6b1301b103198e11bc070f227e59ed08b658e24e28c382d0863763387bd9eb1'
+            '3a1e5f989334392f1ffe0f22eba387b3ffbdb2821e270601843cd02f866caee7'
+            '5b44bf7784bcd9eca9d60cfc14643fcc410afcb30527ac4f99dcb9e4a11d2aa4'
+            '3f334f44fa027fd71c9888a09c8462e26fc5e3f6a5a5924b1f9f56972899ba4c'
+            '9f90f656ca9a2f2da9f3c077b30e6c95d33ea68ea55746db9597b0b5223f5f5d'
+            '7e81cffe2e891a0df576bcc127b0f8350aa31fd28265e2c5c71ba2054353b22f'
+            'e6233a9794289b0f7d6ede06d561de1e4d1fd7bed6e789df2e939d40f8263ff2'
+            '73d2bc359d5363787454fc4f0e3e6a6fab5a823b0e0d51764e094ec53e496429'
+            '39fe2c3004b5c74e1dc455a51b779fee89d029c7d1c85416941f7773bf2c0e54'
+            '69f27f3d7a74b7d6289ffd3c8a0e22fd9d7977075cde8b42e8e2e082f883419b'
+            'dbf0967b6ee32a01f2e599357ecd0dda6e5be97f0ea11271f3f28dcf619007ff')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -229,7 +267,26 @@ prepare() {
   0045-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
   0046-Change-the-default-base-address-for-x86_64.patch \
   0047-cygcheck-remove-an-unused-variable-causing-a-build-e.patch \
-  0048-Cygwin-console-fix-deadlock-in-pcon-teardown.patch
+  0048-Cygwin-console-fix-deadlock-in-pcon-teardown.patch \
+  0049-Cygwin-pty-Do-not-set-input_available_event-when-app.patch \
+  0050-Cygwin-pty-Introduce-a-helper-function-get_handle_fr.patch \
+  0051-Cygwin-pty-Prevent-unintended-conversion-for-cursor-.patch \
+  0052-Cygwin-pty-Fix-race-issue-between-starting-and-exiti.patch \
+  0053-Cygwin-pty-Treat-CR-NL-in-accept_input-the-same-as-i.patch \
+  0054-Cygwin-console-Ensure-the-master-thread-runs-only-wh.patch \
+  0055-Cygwin-console-Fix-NOFLSH-behaviour-a-bit.patch \
+  0056-Cygwin-console-Fix-typeahead-input-for-bash.patch \
+  0057-Cygwin-pty-detect-pcon-backed-pty-for-non-Cygwin-spa.patch \
+  0058-Cygwin-pty-Discard-pcon-input-buffer-when-discard_in.patch \
+  0059-Cygwin-pty-Fixup-pty-state-after-a-cygwin-app-exits.patch \
+  0060-Cygwin-console-re-enable-the-master-thread-before-se.patch \
+  0061-Cygwin-console-Correct-previous-NOFLSH-fix.patch \
+  0062-Cygwin-pty-Do-not-transfer-input-to-nat-pipe-while-m.patch \
+  0063-Cygwin-pty-Fix-nat_pipe_owner_pid-when-gdb-runs-non-.patch \
+  0064-Cygwin-pty-grow-GetConsoleProcessList-buffer-in-find.patch \
+  0065-Cygwin-pty-bound-the-cursor-sync-round-trip-so-an-ex.patch \
+  0066-Cygwin-pty-do-not-leak-nat-handles-when-adopting-the.patch \
+  0067-Cygwin-pty-validate-the-cursor-position-reply-before.patch
 }
 
 build() {

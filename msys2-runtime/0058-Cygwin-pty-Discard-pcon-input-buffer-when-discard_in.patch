@@ -1,0 +1,54 @@
+From b19003e68638c4893d05ee5df93a8d4b1e3fd2d3 Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Sat, 13 Jun 2026 21:48:19 +0900
+Subject: [PATCH 58/N] Cygwin: pty: Discard pcon input buffer when
+ discard_input is called
+
+Previously, the process on pty could not be a child of non-cygwin
+process. In that case, it is not necessary to flush pcon input buffer
+even when discard_input() is called. However, now, the child process
+of non-cygwin app on pseudo console is running on pty. So,
+discard_input() should affect to the pcon input buffer as well.
+
+This prevents the problem wihch can be demonstrated by:
+  1) Run 'sleep 10' in cmd.exe
+  2) Enter 'ps\n' while sleeping
+  3) Press Ctrl-C
+  4) 'ps' will be executed after terminating 'sleep' by Ctrl-C.
+
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviwed-by: Mark Geisert <mark@maxrnd.com>
+(cherry picked from commit ee929717bd09bd5612419e971cba7b6370039431)
+---
+ winsup/cygwin/fhandler/pty.cc | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index ac6b251..5ade8f0 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -418,6 +418,14 @@ fhandler_pty_master::discard_input ()
+   if (!get_ttyp ()->pcon_activated)
+     while (::bytes_available (bytes_in_pipe, from_master_nat) && bytes_in_pipe)
+       ReadFile (from_master_nat, buf, sizeof(buf), &n, NULL);
++  else
++    {
++      DWORD target_pid = get_ttyp ()->nat_pipe_owner_pid;
++      DWORD resume_pid =
++	fhandler_pty_common::attach_console_temporarily (target_pid);
++      FlushConsoleInputBuffer (h_pcon_in_dupped);
++      fhandler_pty_common::resume_from_temporarily_attach (resume_pid);
++    }
+   get_ttyp ()->discard_input = true;
+   ReleaseMutex (input_mutex);
+ }
+@@ -2420,7 +2428,8 @@ fhandler_pty_master::write (const void *ptr, size_t len)
+       for (size_t i = 0, j = 0; i < len; i++)
+ 	{
+ 	  process_sig_state r = process_sigs (buf[i], get_ttyp (), this);
+-	  if (r != done_with_debugger)
++	  if (r != done_with_debugger &&
++	      (r != signalled || (ti.c_lflag & NOFLSH) || buf[i] == '\003'))
+ 	    {
+ 	      char c = buf[i];
+ 	      /* Workaround for pseudo console in Windows 11 */

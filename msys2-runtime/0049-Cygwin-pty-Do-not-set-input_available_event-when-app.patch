@@ -1,0 +1,36 @@
+From e602a81b78eb6e416138a6e8f22424de17056d88 Mon Sep 17 00:00:00 2001
+From: Takashi Yano <takashi.yano@nifty.ne.jp>
+Date: Mon, 8 Jun 2026 20:54:44 +0900
+Subject: [PATCH 49/N] Cygwin: pty: Do not set input_available_event when
+ applying line_edit()
+
+The commit a0b38a81b9be sets input_available_event even if the
+transferred input is still in the readahead buffer and is not ready
+to read. The SetEvent() is called in accept_input() via line_edit(),
+so setting this event here is not correct. This causes the issue
+that read() returns 0 instead of blocking until accept_input() is
+called. This patch removes this SetEvent() call.
+
+Fixes: a0b38a81b9be ("Cygwin: pty: Apply line_edit() for transferred input to to_cyg")
+Addresses: https://cygwin.com/pipermail/cygwin/2026-June/259776.html
+Reported-by: Koichi Murase <myoga.murase@gmail.com>
+Signed-off-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Mark Geisert <mark@maxrnd.com>
+(cherry picked from commit f977d6edb4659a7ea1e341e2002f6d107e7d8013)
+(cherry picked from commit cad596e35adeb1e56ba65c730b73ea9e6e0fe915)
+---
+ winsup/cygwin/fhandler/pty.cc | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index 6f6164a..e2dad3b 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -2764,7 +2764,6 @@ fhandler_pty_master::apply_line_edit_to_transferred_input ()
+       n -= ret;
+       p += ret;
+     }
+-  SetEvent (input_available_event);
+ }
+ 
+ static DWORD
