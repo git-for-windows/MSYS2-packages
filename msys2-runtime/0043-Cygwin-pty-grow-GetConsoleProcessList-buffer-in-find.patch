@@ -1,0 +1,82 @@
+From 12c0b81d224816faa327aff1b5760d08f78f5318 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 29 May 2026 19:07:26 +0200
+Subject: [PATCH 43/N] Cygwin: pty: grow GetConsoleProcessList buffer in
+ find_pcon_pty()
+
+find_pcon_pty() was passing a fixed 128-DWORD stack array to
+GetConsoleProcessList(). If the calling Cygwin process happens to be
+attached to a console with more than 128 processes, the Win32
+function returns the required size and the buffer contents are
+undefined; the existing if-zero check did not catch that case, so
+the subsequent loop walked uninitialised data and could either miss
+the candidate pty or, worse, match against junk PIDs and return the
+wrong tty index.
+
+Adopt the buffer-too-small dance from
+fhandler_termios::get_console_process_id() in
+winsup/cygwin/fhandler/termios.cc, which already had to solve this
+problem and which also notes that the new condrv does not accept
+oversized first-call buffers
+(https://github.com/microsoft/terminal/issues/18264#issuecomment-2515448548).
+The buffer comes from tmp_pathbuf so the same NT_MAX_PATH cap
+(currently 1024 DWORDs, i.e. 4096 processes) applies; we bail out
+with -1 if even that is not enough rather than allocate unbounded
+memory or guess. Bumping the start-with size from 1 would defeat the
+condrv work-around mentioned above, so we keep the same one-element
+initial probe as termios.cc and let the loop grow.
+
+Suggested-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+(cherry picked from commit b65e1544d45567f0033c57a0aa1543c5e654950a)
+---
+ winsup/cygwin/tty.cc | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/winsup/cygwin/tty.cc b/winsup/cygwin/tty.cc
+index 5cce05d..9bc2a08 100644
+--- a/winsup/cygwin/tty.cc
++++ b/winsup/cygwin/tty.cc
+@@ -19,6 +19,7 @@ details. */
+ #include "cygheap.h"
+ #include "pinfo.h"
+ #include "shared_info.h"
++#include "tls_pbuf.h"
+ 
+ HANDLE NO_COPY tty_list::mutex = NULL;
+ 
+@@ -135,7 +136,9 @@ tty_list::init ()
+ int
+ tty_list::find_pcon_pty ()
+ {
+-  DWORD pids[128];
++  tmp_pathbuf tp;
++  DWORD *pids = (DWORD *) tp.c_get ();
++  const DWORD buf_size = NT_MAX_PATH / sizeof (DWORD);
+   DWORD count = 0;
+   bool got_pids = false;
+ 
+@@ -144,10 +147,20 @@ tty_list::find_pcon_pty ()
+       if (!ttys[i].has_active_pcon ())
+ 	continue;
+ 
+-      /* Fetch the console process list lazily, only on first candidate. */
++      /* Fetch the console process list lazily, only on first candidate.
++	 The buffer-too-large dance mirrors the one in termios.cc's
++	 get_console_process_id() and works around new condrv's dislike
++	 of oversized first-call buffers, see
++	 https://github.com/microsoft/terminal/issues/18264#issuecomment-2515448548 */
+       if (!got_pids)
+ 	{
+-	  count = GetConsoleProcessList (pids, 128);
++	  DWORD buf_size1 = 1;
++	  while ((count = GetConsoleProcessList (pids, buf_size1)) > buf_size1)
++	    {
++	      if (count > buf_size)
++		return -1;
++	      buf_size1 = count;
++	    }
+ 	  if (!count)
+ 	    return -1;
+ 	  got_pids = true;

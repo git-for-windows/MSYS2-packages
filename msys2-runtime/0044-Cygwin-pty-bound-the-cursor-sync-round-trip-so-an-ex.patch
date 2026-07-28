@@ -1,0 +1,99 @@
+From 57fd3f604d0b2261abd135ca522e3f728a579302 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Thu, 25 Jun 2026 13:41:42 +0200
+Subject: [PATCH 44/N] Cygwin: pty: bound the cursor-sync round-trip so an
+ exiting process cannot hang
+
+The cursor-position fixup added in "Cygwin: pty: Fixup pty state after
+a cygwin app exits" runs from cleanup() on every foreground Cygwin-app
+exit while a pseudo console is active, and it waits on two unbounded
+loops for the master to answer the "ESC[6n" it just sent: one that
+spins until the pcon_start_pid slot is free, and one that spins until
+the master clears the slot again. pcon_start_pid is only ever cleared
+once master::write() parses the terminal's reply, so if that reply
+never comes, because the terminal is going away, the forwarding pipe
+is broken, or a previous requester died mid-handshake, the exiting
+process spins on yield() forever and never exits.
+
+Bound both waits with a three second deadline using GetTickCount64(),
+and on timeout clear our own pcon_start_pid slot, but only if it is
+still ours, so a give-up does not stomp a later requester. Also restore
+the pcon_start and pcon_start_pid reset that the same commit removed
+from close_pseudoconsole(); it is the backstop that keeps a requester
+which died without clearing its slot from wedging the next one. The
+worst case is now a slightly stale cursor after a timeout rather than a
+process that refuses to exit.
+
+Fixes: b34394d456b6 ("Cygwin: pty: Fixup pty state after a cygwin app exits")
+Assisted-by: Opus 4.8
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+Co-authored-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+Reviewed-by: Takashi Yano <takashi.yano@nifty.ne.jp>
+---
+ winsup/cygwin/fhandler/pty.cc | 30 +++++++++++++++++++++++++++++-
+ 1 file changed, 29 insertions(+), 1 deletion(-)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index 33efbf0..5baf96a 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -226,6 +226,7 @@ atexit_func (void)
+ void
+ fhandler_pty_slave::req_fixup_pcon_state (void)
+ {
++  ULONGLONG deadline = GetTickCount64 () + 3000;
+   while (true)
+     {
+       WaitForSingleObject (input_mutex, mutex_timeout);
+@@ -233,6 +234,10 @@ fhandler_pty_slave::req_fixup_pcon_state (void)
+ 	break;
+       /* Another request is on going. */
+       ReleaseMutex (input_mutex);
++      if (GetTickCount64 () > deadline)
++	/* A previous requester is stuck; give up this sync rather than
++	   spin forever. */
++	return;
+       yield ();
+     }
+ 
+@@ -245,9 +250,25 @@ fhandler_pty_slave::req_fixup_pcon_state (void)
+   get_ttyp ()->pcon_start_pid = myself->pid;
+   WriteFile (get_output_handle (), "\033[6n", 4, &n, NULL);
+   ReleaseMutex (input_mutex);
+-  while (get_ttyp ()->pcon_start_pid)
++  deadline = GetTickCount64 () + 3000;
++  while (get_ttyp ()->pcon_start_pid && GetTickCount64 () <= deadline)
+     /* wait for completion of fixing-up in master::write(). */
+     yield ();
++  /* If the master never answered (e.g. the terminal is going away),
++     clear our own request so a stale pcon_start_pid cannot wedge the
++     next requester. */
++  if (get_ttyp ()->pcon_start_pid == (pid_t) myself->pid)
++    {
++      WaitForSingleObject (input_mutex, mutex_timeout);
++      if (get_ttyp ()->pcon_start_pid == (pid_t) myself->pid)
++	{
++	  get_ttyp ()->req_fixup_pcon_cur_pos = false;
++	  get_ttyp ()->req_xfer_input = false;
++	  get_ttyp ()->pcon_start = false;
++	  get_ttyp ()->pcon_start_pid = 0;
++	}
++      ReleaseMutex (input_mutex);
++    }
+ }
+ 
+ void
+@@ -3994,6 +4015,13 @@ fhandler_pty_slave::close_pseudoconsole (tty *ttyp, DWORD force_switch_to)
+ 	  ttyp->pcon_activated = false;
+ 	  ttyp->switch_to_nat_pipe = false;
+ 	  ttyp->nat_pipe_owner_pid = 0;
++	  /* Safety net: if a req_fixup_pcon_state() requester died without
++	     clearing its slot, do not leave pcon_start_pid set forever. */
++	  if (ttyp->pcon_start_pid == myself->pid)
++	    {
++	      ttyp->pcon_start = false;
++	      ttyp->pcon_start_pid = 0;
++	    }
+ 	}
+       if (ttyp->pcon_handle_ready_event)
+ 	{
