@@ -1,0 +1,58 @@
+From 1c2fdcd892d856aa8d1502eb6035602790e1ec59 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Fri, 11 Sep 2026 23:04:28 +0200
+Subject: [PATCH 55/N] Cygwin: pty: preserve terminal replies after PTY
+ adoption
+
+MSYS Vim launched by native Git from Bash in MinTTY can delete the first
+line, enter Insert mode or insert RGB text at startup. PTY adoption sends
+Vim's output directly to MinTTY, but input stays with ConHost until the
+first Cygwin read/select. Vim inherits Git's foreground process group, so
+the process-group callback does not trigger an earlier handoff.
+
+Vim sends terminal queries before reading. ConHost interprets cursor
+position reports as function keys, which the later input transfer delivers
+to Vim as keystrokes. A color reply split across the handoff reaches Vim
+without its introducer. Fragmented writes are valid; inconsistent routing
+corrupts their contents.
+
+Requesting noncanonical input with tcsetattr() provides a control point
+before these queries. Handing input to the Cygwin PTY there aligns both
+directions before replies can be misdirected, rather than waiting for
+consumption. Only the foreground process on an active pseudoconsole takes
+this path; canonical, background and pcon-disabled calls are unaffected.
+
+The existing synchronized transfer preserves queued input and line
+discipline. Balancing the temporary reader registration without transferring
+back keeps input on the Cygwin pipe without a permanent reader claim or
+changes to native-owner cleanup. Releasing the output mutex first avoids
+holding it across the input-transfer path.
+
+Addresses: https://github.com/git-for-windows/git/issues/6403
+Fixes: 6eed1ef74869 ("Cygwin: pty: detect pcon-backed pty for non-Cygwin-spawned children")
+Assisted-by: GPT-6
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ winsup/cygwin/fhandler/pty.cc | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/winsup/cygwin/fhandler/pty.cc b/winsup/cygwin/fhandler/pty.cc
+index ba726a0..de53dbf 100644
+--- a/winsup/cygwin/fhandler/pty.cc
++++ b/winsup/cygwin/fhandler/pty.cc
+@@ -1767,6 +1767,15 @@ fhandler_pty_slave::tcsetattr (int, const struct termios *t)
+   acquire_output_mutex (mutex_timeout);
+   get_ttyp ()->ti = *t;
+   release_output_mutex ();
++
++  /* Terminal queries can precede the first read/select after entering
++     noncanonical mode.  Their replies must bypass the native console. */
++  if (!(t->c_lflag & ICANON) && get_ttyp ()->pcon_activated
++      && get_ttyp ()->getpgid () == myself->pgid)
++    {
++      mask_switch_to_nat_pipe (true, true);
++      mask_switch_to_nat_pipe (false, false);
++    }
+   return 0;
+ }
+ 
