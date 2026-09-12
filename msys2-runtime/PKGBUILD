@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.10
-pkgrel=1
+pkgrel=2
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -82,9 +82,10 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0051-Make-paths-WCS-MBS-conversion-explicit.patch
         0052-msys2-runtime-restore-fast-path-for-current-user-pri.patch
         0053-Change-the-default-base-address-for-x86_64.patch
-        0054-dumper-allow-compiling-with-binutils-2.47.patch)
+        0054-dumper-allow-compiling-with-binutils-2.47.patch
+        0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch)
 sha256sums=('7eac3518c0225e991a00a7ad36009090b54abead9dc802236771cde3d9332f7c'
-            'add6be70f5e518ec09b05ed626b5743d9754cafeb626ceb22e0134a10433f1ae'
+            '5ab53e63bf68dc9696c9b3c51b6ff0cd4796f4305fdebb3da25f86ce558a79aa'
             '7c83791a32dbc139159802b7349fe50f69610863feea99bddcbed7d8d449b34f'
             '961fdf373c882fdec852453a6db368c2817fa4c422a5f786f51e277be1a68621'
             '92cdf141ffdd4142fb209da4d5b3cb7264e9fc55e70d2a88df8e2971a920b1ea'
@@ -138,7 +139,8 @@ sha256sums=('7eac3518c0225e991a00a7ad36009090b54abead9dc802236771cde3d9332f7c'
             'f4e9b8aadcaa47d1debbb9509836a93e2233aa3c79b56d13897711a92a98e31e'
             '2c393c0dc2b2b5d62a767cccd80dd89c8d7950edbf25e44dd7d2aee89c894b6d'
             '8588d779158683b1df0b6170029e22939af9d7f412e654e8d601e15eff6810cb'
-            '35ee2aef88e6e686e9cc762ca7fb1326fd607a49aef103d6e277ce0aaf261ce6')
+            '35ee2aef88e6e686e9cc762ca7fb1326fd607a49aef103d6e277ce0aaf261ce6'
+            '380b0683f91295085f6e4eb4b82c758c1c520ac0623b84cd4a7142fb287c0580')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -247,7 +249,8 @@ prepare() {
   0051-Make-paths-WCS-MBS-conversion-explicit.patch \
   0052-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
   0053-Change-the-default-base-address-for-x86_64.patch \
-  0054-dumper-allow-compiling-with-binutils-2.47.patch
+  0054-dumper-allow-compiling-with-binutils-2.47.patch \
+  0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch
 }
 
 build() {
