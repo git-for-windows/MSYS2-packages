@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.10
-pkgrel=2
+pkgrel=3
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -83,9 +83,14 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0052-msys2-runtime-restore-fast-path-for-current-user-pri.patch
         0053-Change-the-default-base-address-for-x86_64.patch
         0054-dumper-allow-compiling-with-binutils-2.47.patch
-        0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch)
+        0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch
+        0056-Cygwin-open-Unlock-fdtab-before-open_with_arch.patch
+        0057-Cygwin-console-Fix-regression-in-console-input.patch
+        0058-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch
+        0059-Cygwin-console-Fix-undesired-mode-change-at-exit-of-.patch
+        0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch)
 sha256sums=('7eac3518c0225e991a00a7ad36009090b54abead9dc802236771cde3d9332f7c'
-            '5ab53e63bf68dc9696c9b3c51b6ff0cd4796f4305fdebb3da25f86ce558a79aa'
+            '3629ea6b9c501554091f73a2d9e808a6f6ca92c065c3216da7289a18802991c2'
             '7c83791a32dbc139159802b7349fe50f69610863feea99bddcbed7d8d449b34f'
             '961fdf373c882fdec852453a6db368c2817fa4c422a5f786f51e277be1a68621'
             '92cdf141ffdd4142fb209da4d5b3cb7264e9fc55e70d2a88df8e2971a920b1ea'
@@ -140,7 +145,12 @@ sha256sums=('7eac3518c0225e991a00a7ad36009090b54abead9dc802236771cde3d9332f7c'
             '2c393c0dc2b2b5d62a767cccd80dd89c8d7950edbf25e44dd7d2aee89c894b6d'
             '8588d779158683b1df0b6170029e22939af9d7f412e654e8d601e15eff6810cb'
             '35ee2aef88e6e686e9cc762ca7fb1326fd607a49aef103d6e277ce0aaf261ce6'
-            '380b0683f91295085f6e4eb4b82c758c1c520ac0623b84cd4a7142fb287c0580')
+            '380b0683f91295085f6e4eb4b82c758c1c520ac0623b84cd4a7142fb287c0580'
+            'caf67c600677668e1f28c450d4014c5c9b366568d352d0716cd44908d1d059d6'
+            '952afd51b6a07ca0a07f90708ea0a6333bf57c05e18e107b5fe0815cc11829e0'
+            '8d24e2069e43f5e65717de0913d90497bbd873e6cc3dded3cebbf04b3906ba44'
+            'ec07420cca3f984069525049644ed609ba6cfac557e7472ce15b0672a95bf3c9'
+            '337366290b4d333b13da947bb31d7deff2c595760740d4a6c10237a9be9442e4')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -250,7 +260,12 @@ prepare() {
   0052-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
   0053-Change-the-default-base-address-for-x86_64.patch \
   0054-dumper-allow-compiling-with-binutils-2.47.patch \
-  0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch
+  0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch \
+  0056-Cygwin-open-Unlock-fdtab-before-open_with_arch.patch \
+  0057-Cygwin-console-Fix-regression-in-console-input.patch \
+  0058-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch \
+  0059-Cygwin-console-Fix-undesired-mode-change-at-exit-of-.patch \
+  0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch
 }
 
 build() {
