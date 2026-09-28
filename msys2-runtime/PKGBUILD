@@ -4,7 +4,7 @@
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
 pkgver=3.6.10
-pkgrel=3
+pkgrel=4
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -88,9 +88,10 @@ source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgve
         0057-Cygwin-console-Fix-regression-in-console-input.patch
         0058-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch
         0059-Cygwin-console-Fix-undesired-mode-change-at-exit-of-.patch
-        0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch)
+        0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch
+        0061-Cygwin-console-Avoid-deadlock-with-app-execution-ali.patch)
 sha256sums=('7eac3518c0225e991a00a7ad36009090b54abead9dc802236771cde3d9332f7c'
-            '3629ea6b9c501554091f73a2d9e808a6f6ca92c065c3216da7289a18802991c2'
+            '8530392879c3f93aea4680a56ca072219908517a01e69f1a029558190da057da'
             '7c83791a32dbc139159802b7349fe50f69610863feea99bddcbed7d8d449b34f'
             '961fdf373c882fdec852453a6db368c2817fa4c422a5f786f51e277be1a68621'
             '92cdf141ffdd4142fb209da4d5b3cb7264e9fc55e70d2a88df8e2971a920b1ea'
@@ -150,7 +151,8 @@ sha256sums=('7eac3518c0225e991a00a7ad36009090b54abead9dc802236771cde3d9332f7c'
             '952afd51b6a07ca0a07f90708ea0a6333bf57c05e18e107b5fe0815cc11829e0'
             '8d24e2069e43f5e65717de0913d90497bbd873e6cc3dded3cebbf04b3906ba44'
             'ec07420cca3f984069525049644ed609ba6cfac557e7472ce15b0672a95bf3c9'
-            '337366290b4d333b13da947bb31d7deff2c595760740d4a6c10237a9be9442e4')
+            '337366290b4d333b13da947bb31d7deff2c595760740d4a6c10237a9be9442e4'
+            'e9d022a50769b82bf5ba556af500476d88d2140eeb02ca0d4289e9e1b694a24b')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -265,7 +267,8 @@ prepare() {
   0057-Cygwin-console-Fix-regression-in-console-input.patch \
   0058-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch \
   0059-Cygwin-console-Fix-undesired-mode-change-at-exit-of-.patch \
-  0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch
+  0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch \
+  0061-Cygwin-console-Avoid-deadlock-with-app-execution-ali.patch
 }
 
 build() {
