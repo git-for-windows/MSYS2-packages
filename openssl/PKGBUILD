@@ -1,7 +1,7 @@
 # Maintainer: Alexey Pavlov <alexpux@gmail.com>
 
 pkgname=('openssl' 'libopenssl' 'openssl-devel' 'openssl-docs')
-pkgver=3.5.8
+pkgver=3.5.9
 pkgrel=1
 pkgdesc='The Open Source toolkit for Secure Sockets Layer and Transport Layer Security'
 arch=('i686' 'x86_64')
@@ -13,7 +13,7 @@ source=("https://github.com/openssl/openssl/releases/download/openssl-${pkgver}/
         '0001-Use-usr-ssl-as-ca-dir-instead-of-.-demoCA.patch'
         '0002-Support-MSYS2.patch'
         '0004-Override-engines-directory.patch')
-sha256sums=('a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2'
+sha256sums=('603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a'
             'SKIP'
             'd9a26120b16ac9787e12a18c9d6005e241097773b38d8c86641e20b22e2e9252'
             '3ce4e76cbfbed03f7d5bd8812818e08f1eaa54ce8d26bedb006f549e62cb148b'
