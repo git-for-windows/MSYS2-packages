@@ -1,7 +1,8 @@
-From 9226de789095098f7e8cfc38a4bc7a0a218de98f Mon Sep 17 00:00:00 2001
+From af27fac83be64eb3dda89e40f10a198b1b7397f2 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Tue, 19 Dec 2023 00:46:56 +0100
-Subject: [PATCH] Disallow interop-tests and extra-tests to run concurrently
+Subject: [PATCH 5/5] Disallow interop-tests and extra-tests to run
+ concurrently
 
 These two test suites try to create/access the same files, that's why.
 
@@ -11,18 +12,15 @@ Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
  1 file changed, 2 insertions(+)
 
 diff --git a/Makefile.in b/Makefile.in
-index 32bc2a0f..3163ff54 100644
+index a7241fc5..911e2b44 100644
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -726,6 +726,8 @@ unit: regress-unit-binaries
- 		OBJ="$(BUILDDIR)/regress" \
- 		$@ && echo $@ tests passed
+@@ -826,6 +826,8 @@ unit-bench: regress-unit-binaries
+ 
+ TEST_SSH_SSHD="$(BUILDDIR)/sshd"
  
 +extra-tests: | interop-tests
 +
  interop-tests t-exec file-tests extra-tests: regress-prep regress-binaries $(TARGETS)
  	cd $(srcdir)/regress || exit $$?; \
- 	EGREP='@EGREP@' \
--- 
-2.43.0
-
+ 	AWK='@AWK@' \
