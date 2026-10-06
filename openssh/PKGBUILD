@@ -1,7 +1,7 @@
 # Maintainer: Alexey Pavlov <alexpux@gmail.com>
 
 pkgname=openssh
-pkgver=10.5p1
+pkgver=10.6p1
 pkgrel=1
 pkgdesc='Free version of the SSH connectivity tools'
 url='http://www.openssh.org/portable.html'
@@ -16,13 +16,13 @@ source=("https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/${pkgname}-${pkgve
         0003-openssh-skip-privilege-separation-tests.patch
         0004-Allow-scp-to-copy-files-that-start-with-a-Windows-dr.patch
         0005-Disallow-interop-tests-and-extra-tests-to-run-concur.patch)
-sha256sums=('d44d28a839ea9daf969cc69150fde59910b2b39361dad81a3bd6cbd19218db11'
+sha256sums=('a9dc9565dffe8640f64d863cd29a32bc4a3dbdec0566a7fc44c5d6ee767d5f39'
             'SKIP'
-            'ca1e4a8e6248cd4e36ece97005faff1cbd8bdfdda197be7194303a9e5209f492'
-            '5d9a69b4e37dba1ecd87fa71a80743ba9563dd64b91698b1d667b6bcdac752ed'
-            'bacb61023f5afb4c58fe19001e97572e8f8a2509d2654b100538ded28df7d2ee'
-            'da2d432be272f21b7436c172b4197553300fbfb5863a032ece90acf44e24a80a'
-            '101a92a25fd447e6f1efb0bd3e3dae96af90cdc7a239943500645d612bdf860a')
+            'f623b710e1ae2d284198117e4a01a2f7e55303edc2aa1742f93313d17f90edea'
+            'f9762bd8d2be2e39e5ee1fb7b9de7c536ecf98aca170d853c1c344061055b640'
+            '0f32abc19a153e214c8c9e216ab102dd6750b472b4895a59776fcbdf1c044654'
+            'c8e30ee0a2f6d6522e27157dd1e3334499335ef1f2841b3f816bf34afcd8aa5f'
+            '408362f5d8c2c13d1aabdfed07b64c54e26909b7cdd74217cf0c8a5c779f5286')
 validpgpkeys=('59C2118ED206D927E667EBE3D3E5F56B6D920D30'
               '7168B983815A5EEF59A4ADFD2A3F414E736060BA')
 

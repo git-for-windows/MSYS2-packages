@@ -1,7 +1,7 @@
-From 69cdfc97ac3d23c7c3d3483872d8fa94c272a69e Mon Sep 17 00:00:00 2001
+From 6e98104ae45cda6f990e46162d42d2a7a50594ea Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Mon, 22 Aug 2016 09:17:42 +0200
-Subject: [PATCH 1/4] Forward-port MSys2 patches
+Subject: [PATCH 1/5] Forward-port MSys2 patches
 
 Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
 ---
@@ -29,18 +29,18 @@ index 980b0208..1534145b 100755
  	SUN_REL=`echo "$UNAME_RELEASE" | sed -e 's/[^.]*//'`
  	GUESS=powerpcle-unknown-solaris2$SUN_REL
 diff --git a/configure.ac b/configure.ac
-index 22fee70f..217e5e91 100644
+index bb4d065f..9e579c64 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -701,7 +701,7 @@ case "$host" in
+@@ -776,7 +776,7 @@ case "$host" in
  	AC_DEFINE([DISABLE_UTMP], [1], [Define if you don't want to use utmp])
  	AC_DEFINE([DISABLE_WTMP], [1], [Define if you don't want to use wtmp])
  	;;
 -*-*-cygwin*)
 +*-*-cygwin* | *-*-msys*)
+ 	is_cygwin=1
  	LIBS="$LIBS /usr/lib/textreadmode.o"
  	AC_DEFINE([HAVE_CYGWIN], [1], [Define if you are on Cygwin])
- 	AC_DEFINE([USE_PIPES], [1], [Use PIPES instead of a socketpair()])
 diff --git a/contrib/cygwin/Makefile b/contrib/cygwin/Makefile
 index 4b78cd95..02e74ffc 100644
 --- a/contrib/cygwin/Makefile
@@ -55,7 +55,7 @@ index 4b78cd95..02e74ffc 100644
  defaultsdir=$(sysconfdir)/defaults/etc
  inetdefdir=$(defaultsdir)/inetd.d
 diff --git a/openbsd-compat/bsd-cygwin_util.c b/openbsd-compat/bsd-cygwin_util.c
-index 9ede21d2..9f411ba5 100644
+index c182fa44..2fa36837 100644
 --- a/openbsd-compat/bsd-cygwin_util.c
 +++ b/openbsd-compat/bsd-cygwin_util.c
 @@ -88,6 +88,7 @@ static struct wenv {
@@ -67,7 +67,7 @@ index 9ede21d2..9f411ba5 100644
  	{ NL("PATH=") },
  	{ NL("PATHEXT=") },
 diff --git a/regress/agent-ptrace.sh b/regress/agent-ptrace.sh
-index df55b34a..dc589b99 100644
+index 6f172998..ee4ddd94 100644
 --- a/regress/agent-ptrace.sh
 +++ b/regress/agent-ptrace.sh
 @@ -5,7 +5,7 @@ tid="disallow agent ptrace attach"
@@ -93,7 +93,7 @@ index 3f88d41f..84b42267 100644
  verbose "test reexec fallback"
  
 diff --git a/regress/test-exec.sh b/regress/test-exec.sh
-index df43f021..13fac759 100644
+index 30a2a28a..c2b52cf0 100644
 --- a/regress/test-exec.sh
 +++ b/regress/test-exec.sh
 @@ -67,6 +67,9 @@ OSF1*)
@@ -106,6 +106,3 @@ index df43f021..13fac759 100644
  esac
  
  # If configure tells us to use a different egrep, create a wrapper function
--- 
-2.39.1
-

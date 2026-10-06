@@ -1,7 +1,7 @@
-From d32c034630efae2b3b629e1c880664a26745eefe Mon Sep 17 00:00:00 2001
+From 22a5d2946963451e7b1b78a02b3fcc08d61c5629 Mon Sep 17 00:00:00 2001
 From: Johannes Schindelin <johannes.schindelin@gmx.de>
 Date: Mon, 22 Aug 2016 17:09:20 +0200
-Subject: [PATCH 2/4] openssh: work around Cygwin declaring setkey
+Subject: [PATCH 2/5] openssh: work around Cygwin declaring setkey
 
 When _XOPEN_SOURCE is defined, setkey() is declared in
 /usr/include/stdlib.h in a manner that is incompatible with
@@ -15,7 +15,7 @@ Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
  1 file changed, 4 insertions(+)
 
 diff --git a/includes.h b/includes.h
-index 6d17ef6d..dbddb926 100644
+index 96cddbc2..3eb44adf 100644
 --- a/includes.h
 +++ b/includes.h
 @@ -22,6 +22,10 @@
@@ -29,6 +29,3 @@ index 6d17ef6d..dbddb926 100644
  #include <sys/types.h>
  #include <sys/socket.h> /* For CMSG_* */
  
--- 
-2.39.1
-
