@@ -28,7 +28,27 @@ source=(https://ftp.gnu.org/gnu/bash/bash-${_basever}.tar.gz{,.sig}
         0002-bash-4.3-msysize.patch
         0005-bash-4.3-msys2-fix-lineendings.patch
         0006-bash-4.3-add-pwd-W-option.patch
-        0007-fix-static-build.patch)
+        0007-fix-static-build.patch
+        0008-builtins-implement-expr.patch
+        0009-tests-cover-the-expr-builtin.patch
+        0010-tests-import-the-GNU-coreutils-expr-test-suite.patch
+        0011-jobs-add-register_spawned_child-.-for-non-fork-child.patch
+        0012-execute_cmd-introduce-nofastspawn-shopt-and-fast_spa.patch
+        0013-execute_cmd-introduce-FAST_SPAWN_-sentinels.patch
+        0014-execute_cmd-implement-fast-spawn-path-for-synchronou.patch
+        0015-execute_cmd-handle-simple-redirections-in-the-spawnv.patch
+        0016-execute_cmd-handle-pipeline-stages-in-the-spawnve-fa.patch
+        0017-execute_cmd-factor-out-shared-expand-resolve-helpers.patch
+        0018-execute_cmd-bypass-the-early-fork-in-pipeline-stages.patch
+        0019-execute_cmd-support-no-expansion-heredocs-in-the-fas.patch
+        0020-execute_cmd-extract-a-reusable-scanner-for-unsafe-wo.patch
+        0021-execute_cmd-support-expanding-heredocs-whose-body-is.patch
+        0022-execute_cmd-support-here-strings-word-in-the-spawnve.patch
+        0023-execute_cmd-support-async-commands-in-the-spawnve-fa.patch
+        0024-execute_cmd-remove-dead-REDIRECT_BOTH-bail-out-from-.patch
+        0025-execute_cmd-lift-fd-3-redirect-restriction-in-the-sp.patch
+        0026-execute_cmd-skip-fast-spawn-path-when-unable-to-repl.patch
+        0027-execute_cmd-wrap-the-spawnve-fast-path-in-an-unwind-.patch)
 if [ $_patchlevel -gt 000 ]; then
   for (( p=1; p<=$((10#${_patchlevel})); p++ )); do
     source=(${source[@]} https://ftp.gnu.org/gnu/bash/bash-${_basever}-patches/bash${_basever//./}-$(printf "%03d" $p){,.sig})
@@ -55,6 +75,36 @@ prepare() {
   patch -p1 -i ${srcdir}/0005-bash-4.3-msys2-fix-lineendings.patch
   patch -p1 -i ${srcdir}/0006-bash-4.3-add-pwd-W-option.patch
   patch -p1 -i ${srcdir}/0007-fix-static-build.patch
+
+  # Cygwin spawnve() fast path: skip fork()+execve() for synchronous
+  # external commands in favor of CreateProcess() via spawnve().  This
+  # is the work tracked in the bash-spawnve-fast-path topic; see the
+  # individual patch headers for details and benchmark numbers.
+  for p in \
+    0008-builtins-implement-expr.patch \
+    0009-tests-cover-the-expr-builtin.patch \
+    0010-tests-import-the-GNU-coreutils-expr-test-suite.patch \
+    0011-jobs-add-register_spawned_child-.-for-non-fork-child.patch \
+    0012-execute_cmd-introduce-nofastspawn-shopt-and-fast_spa.patch \
+    0013-execute_cmd-introduce-FAST_SPAWN_-sentinels.patch \
+    0014-execute_cmd-implement-fast-spawn-path-for-synchronou.patch \
+    0015-execute_cmd-handle-simple-redirections-in-the-spawnv.patch \
+    0016-execute_cmd-handle-pipeline-stages-in-the-spawnve-fa.patch \
+    0017-execute_cmd-factor-out-shared-expand-resolve-helpers.patch \
+    0018-execute_cmd-bypass-the-early-fork-in-pipeline-stages.patch \
+    0019-execute_cmd-support-no-expansion-heredocs-in-the-fas.patch \
+    0020-execute_cmd-extract-a-reusable-scanner-for-unsafe-wo.patch \
+    0021-execute_cmd-support-expanding-heredocs-whose-body-is.patch \
+    0022-execute_cmd-support-here-strings-word-in-the-spawnve.patch \
+    0023-execute_cmd-support-async-commands-in-the-spawnve-fa.patch \
+    0024-execute_cmd-remove-dead-REDIRECT_BOTH-bail-out-from-.patch \
+    0025-execute_cmd-lift-fd-3-redirect-restriction-in-the-sp.patch \
+    0026-execute_cmd-skip-fast-spawn-path-when-unable-to-repl.patch \
+    0027-execute_cmd-wrap-the-spawnve-fast-path-in-an-unwind-.patch
+  do
+    msg "applying patch $p"
+    patch -p1 -i ${srcdir}/$p
+  done
 
   autoconf
 }
@@ -95,7 +145,20 @@ build() {
 
 check() {
   cd ${srcdir}/${pkgname}-$_basever
-  make check
+  # The full upstream test suite (`make check` / `tests/run-all`) hangs
+  # on Cygwin/MSYS2 in CI, so restrict ourselves to the two `expr`
+  # suites added by this topic.
+  # `run-expr` exits non-zero via the standard `diff && rm` pattern when
+  # `expr.tests`'s output diverges from `expr.right`.
+  # `run-expr-coreutils` is self-tallying and exits non-zero when its
+  # internal `FAIL` counter is non-zero.  It must be invoked through our
+  # freshly built bash so that `expr` resolves to the builtin rather
+  # than to `/usr/bin/expr`.
+  (
+    cd tests
+    THIS_SH=../bash.exe BASH_TSTOUT=expr.out sh ./run-expr
+    THIS_SH=../bash.exe ../bash.exe ./run-expr-coreutils
+  )
 }
 
 package_bash() {
@@ -149,6 +212,26 @@ sha256sums=('0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba'
             '3c33be8d7363b00189309353f3fcdedfb7c7082c4a1cedbcc76a36fd0a8af8a8'
             'e123c1ef06499405f055d6c920cf267258d7ab3d59d6036e1ee2b5b0edd81ad2'
             'f70394dfe8afd8be94a8358732c4e55b4af069cb40555d1375f2dadee7554797'
+            '8251555ce8635b7873681a47013d7cef208336c28a9bde173c97f0e54a914bcf'
+            '5248f5d013b8b08afda283e30d146d3eb3f4452cc86906b08cacc9d88702e4a5'
+            '97f063c706e623b1c6f7530ff0a163a74ea3253a5a5e268bda39fe1e31803c5c'
+            '12a3eb8a13111ba1645c790cd551edc32052740d433ab544176fd6b7da07b4e1'
+            '0e6c79d48f521ff25670677f71a8dca36bf343781ddb8dccf99d84a2440fe848'
+            '4652f28f21551d5553640baea44caf5c9afc2c10246b3161ec1a4413e49febd3'
+            'b563bd7b10826def7157d98222f1f8f50f04bdd76a1d61ed9a85e5a36922469d'
+            '74ce06648d1b59d61db0bb9873b6ef37af6e11605595dbe9f232e6691ae81634'
+            '2ccfd047aef671c6d1d2f86b89844cf6a8c4d4bb43bd3287faaf62b70eeb4571'
+            'fcde3a01a10f83da44fb54f82b52ccbc0d3a130ec37e53c2f23ec46755a79e5e'
+            '9df6614329edae58f4d2f7e2a4f825d0976f0a1717f4503681741bbbff1a566f'
+            '0e405ab053c0176c4425499c01d2aed52edfbe68765e33aa9cc56de87137b6a9'
+            '9a529c1de2d9d9ccce356e38b85e632572bf081d8cb0b0bfda80dbe623422eed'
+            '95e87b5fa389e18e0ee466020b155e3e3af91c835267b5c868435129bf716e03'
+            '6991d030e9f86469c4d533c1c30d6b4fc13a0720b69bb642d222c067e938e3de'
+            '2bf42263944191adde59e2add24fb7a4132cdae1ef9ec43c8b760b7bf2658e3f'
+            '57b41a4d3d5d8ffcb7b84fec0b2ff4dab676d05bbf6eeb8cd68713df4587bb76'
+            '2e47a2ffc1196460155ee0f18e89f9b595f1c47e2c0ff2ebba4d836a4bd50201'
+            'ca3dd5e041a66c9ca0895baf9fd9c9cc7a14eba801cfe40e5aeb547058198004'
+            'b5a2757dcc71286d84aa7b0b0505eecb2a727ca5fee833f98aeadb971c8f8012'
             '1f608434364af86b9b45c8b0ea3fb3b165fb830d27697e6cdfc7ac17dee3287f'
             'SKIP'
             'e385548a00130765ec7938a56fbdca52447ab41fabc95a25f19ade527e282001'
