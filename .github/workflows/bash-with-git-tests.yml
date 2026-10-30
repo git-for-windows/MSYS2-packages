@@ -1,0 +1,181 @@
+name: bash with Git tests
+
+# Build the `bash` package from this branch and run Git's full test
+# suite against a minimal Git for Windows SDK that has had the freshly
+# built bash installed on top of it.  The test step uses git-sdk-64's
+# `test-ci-artifacts.yml` reusable workflow which fans out across 17
+# parallel matrix shards.
+
+on:
+  push:
+    paths:
+      - 'bash/**'
+      - '.github/workflows/bash-with-git-tests.yml'
+  pull_request:
+    paths:
+      - 'bash/**'
+      - '.github/workflows/bash-with-git-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-bash:
+    runs-on: windows-latest
+    outputs:
+      bash-pkg-name: ${{ steps.makepkg.outputs.pkg-name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Git for Windows SDK
+        uses: git-for-windows/setup-git-for-windows-sdk@v2
+        with:
+          flavor: full
+
+      - name: Build the bash package
+        id: makepkg
+        shell: bash
+        env:
+          # The setup-git-for-windows-sdk action defaults to
+          # MSYSTEM=MINGW64, which makes "shell: bash" run in MinGW
+          # mode.  Building the MSYS bash package itself requires the
+          # MSYS environment so that the msys2-runtime headers (which
+          # define POSIX types like sigset_t and the two-argument
+          # mkdir(2) the bash source expects) are picked up;
+          # otherwise the build fails with "unknown type name
+          # 'sigset_t'" and "too many arguments to function 'mkdir'".
+          MSYSTEM: MSYS
+          CHERE_INVOKING: '1'
+        run: |
+          set -ex
+          cd bash
+          # The "full" SDK does not ship -devel headers for every
+          # makedepends entry; let makepkg pull what is missing via
+          # `--syncdeps` rather than hard-coding a pacman -S list that
+          # would have to track PKGBUILD changes.  Skip the PGP check
+          # since the runner has no keyring loaded for Chet Ramey's
+          # signing key.
+          MAKEFLAGS=-j$(nproc) makepkg --noconfirm \
+              --noprogressbar --syncdeps --skippgpcheck
+          pkg=$(ls bash-*.pkg.tar.* | head -n1)
+          test -n "$pkg"
+          echo "pkg-name=$pkg" >>"$GITHUB_OUTPUT"
+
+      - name: Upload the bash package
+        uses: actions/upload-artifact@v6
+        with:
+          name: bash-pkg
+          path: bash/bash-*.pkg.tar.*
+          if-no-files-found: error
+
+  minimal-sdk-artifact:
+    needs: build-bash
+    runs-on: windows-latest
+    outputs:
+      git-artifacts-extract-location: ${{ steps.git-artifacts-extract-location.outputs.result }}
+    env:
+      G4W_SDK_REPO: git-for-windows/git-sdk-64
+    steps:
+      - name: Get the latest successful ci-artifacts run id
+        id: ci-artifacts-run-id
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const [ owner, repo ] = process.env.G4W_SDK_REPO.split('/')
+            const info = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: 938271, // ci-artifacts.yml
+              status: 'success',
+              per_page: 1
+            })
+            return info.data.workflow_runs[0].id
+
+      - name: Download the minimal SDK and git-artifacts tarballs
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -ex
+          run_id=${{ steps.ci-artifacts-run-id.outputs.result }}
+          curl -H "Authorization: token $GITHUB_TOKEN" \
+            -L https://api.github.com/repos/$G4W_SDK_REPO/actions/runs/$run_id/artifacts |
+            jq -r '.artifacts[] | [.name, .archive_download_url] | @tsv' |
+            tr -d '\r' |
+            while read name url
+            do
+              case "$name" in
+              minimal-sdk|git-artifacts)
+                echo "Downloading $name"
+                curl -H "Authorization: token $GITHUB_TOKEN" \
+                  -#sLo /tmp/"$name".zip "$url"
+                unzip -qo /tmp/"$name".zip
+                ;;
+              esac
+            done
+          ls -la git-sdk-x86_64-minimal.tar.gz git-artifacts.tar.gz
+
+      - name: Download the freshly built bash package
+        uses: actions/download-artifact@v7
+        with:
+          name: bash-pkg
+          path: bash-pkg
+
+      - name: Install the freshly built bash into the minimal SDK
+        shell: bash
+        run: |
+          set -ex
+          mkdir minimal-sdk
+          tar -C minimal-sdk -xzf git-sdk-x86_64-minimal.tar.gz
+          # Verify the SDK as-shipped works before we touch it.
+          minimal-sdk/usr/bin/bash.exe --version
+
+          # Extract the .pkg.tar.zst directly into the SDK tree, skipping
+          # the pacman bookkeeping files at the package root.  We do not
+          # have a pacman database inside this stand-alone tree so a
+          # `pacman -U` would refuse to operate; tar extraction is what
+          # `tar -cf - . | tar xf -` against an installed SDK would do
+          # anyway, just without pacman's transactional accounting.
+          pkg=$(ls bash-pkg/bash-*.pkg.tar.* | head -n1)
+          test -n "$pkg"
+          tar -C minimal-sdk --warning=no-unknown-keyword -xf "$pkg" \
+              --exclude=.PKGINFO --exclude=.BUILDINFO \
+              --exclude=.MTREE --exclude=.INSTALL --exclude=.CHANGELOG
+
+          # Confirm our build (not the SDK's stock bash) is in place.
+          minimal-sdk/usr/bin/bash.exe --version
+
+          # Repackage so test-ci-artifacts.yml can consume it unchanged.
+          tar -C minimal-sdk -cf - . |
+            gzip -1 >git-sdk-x86_64-minimal.tar.gz
+
+      - name: Upload the customized minimal SDK
+        uses: actions/upload-artifact@v6
+        with:
+          name: minimal-sdk
+          path: git-sdk-x86_64-minimal.tar.gz
+          if-no-files-found: error
+
+      - name: Determine where git-artifacts wants to be extracted
+        id: git-artifacts-extract-location
+        shell: bash
+        run: |
+          echo "result=$(tar Oxf git-artifacts.tar.gz git/bin-wrappers/git |
+            sed -n 's|^GIT_EXEC_PATH='\''\(.*\)/git'\''$|\1|p')" >>"$GITHUB_OUTPUT"
+
+      - name: Upload git-artifacts for the test job
+        uses: actions/upload-artifact@v6
+        with:
+          name: git-artifacts
+          path: git-artifacts.tar.gz
+          if-no-files-found: error
+
+  test-minimal-sdk:
+    needs: [minimal-sdk-artifact]
+    uses: git-for-windows/git-sdk-64/.github/workflows/test-ci-artifacts.yml@main
+    with:
+      git-artifacts-extract-location: ${{ needs.minimal-sdk-artifact.outputs.git-artifacts-extract-location }}
