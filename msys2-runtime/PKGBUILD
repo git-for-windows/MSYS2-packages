@@ -3,8 +3,8 @@
 
 pkgbase=msys2-runtime
 pkgname=('msys2-runtime' 'msys2-runtime-devel')
-pkgver=3.6.10
-pkgrel=4
+pkgver=3.6.12
+pkgrel=1
 pkgdesc="Cygwin POSIX emulation engine"
 arch=('x86_64')
 url="https://www.cygwin.com/"
@@ -29,130 +29,130 @@ makedepends=('cocom'
              'docbook-xsl')
 source=('msys2-runtime'::git+https://github.com/cygwin/cygwin#tag=cygwin-${pkgver}
         msys2-runtime.commit
-        0001-Fix-msys-library-name-in-import-libraries.patch
-        0002-Rename-dll-from-cygwin-to-msys.patch
-        0003-Convert-Unix-paths-in-args-env-to-Windows-form-for-n.patch
-        0004-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch
-        0005-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch
-        0006-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch
-        0007-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch
-        0008-Do-not-convert-environment-for-strace.patch
-        0009-strace.cc-Don-t-set-MSYS-noglob.patch
-        0010-Add-debugging-for-strace-make_command_line.patch
-        0011-strace-quiet-be-really-quiet.patch
-        0012-path_conv-special-case-root-directory-to-have-traili.patch
-        0013-When-converting-to-a-Unix-path-avoid-double-trailing.patch
-        0014-dcrt0.cc-Untangle-allow_glob-from-winshell.patch
-        0015-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch
-        0016-Add-debugging-for-build_argv.patch
-        0017-environ.cc-New-facility-environment-variable-MSYS2_E.patch
-        0018-Introduce-the-enable_pcon-value-for-MSYS.patch
-        0019-popen-call-usr-bin-sh-instead-of-bin-sh.patch
-        0020-Expose-full-command-lines-to-other-Win32-processes-b.patch
-        0021-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch
-        0022-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch
-        0023-kill-kill-Win32-processes-more-gently.patch
-        0024-Cygwin-make-option-for-native-inner-link-handling.patch
-        0025-docs-skip-building-texinfo-and-PDF-files.patch
-        0026-install-libs-depend-on-the-toollibs.patch
-        0027-POSIX-ify-the-SHELL-variable.patch
-        0028-Handle-ORIGINAL_PATH-just-like-PATH.patch
-        0029-uname-allow-setting-the-system-name-to-CYGWIN.patch
-        0030-Pass-environment-variables-with-empty-values.patch
-        0031-Optionally-disallow-empty-environment-values-again.patch
-        0032-build_env-respect-the-MSYS-environment-variable.patch
-        0033-Revert-Cygwin-Enable-dynamicbase-on-the-Cygwin-DLL-b.patch
-        0034-Avoid-sharing-cygheaps-across-Cygwin-versions.patch
-        0035-uname-report-msys2-runtime-commit-hash-too.patch
-        0036-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch
-        0037-Cygwin-Fix-segfault-when-XSAVE-area-sizes-are-unalig.patch
-        0038-cygcheck-remove-an-unused-variable-causing-a-build-e.patch
-        0039-fixup-Convert-Unix-paths-in-args-env-to-Windows-form.patch
-        0040-Cygwin-pty-detect-pcon-backed-pty-for-non-Cygwin-spa.patch
-        0041-Cygwin-pty-Discard-pcon-input-buffer-when-discard_in.patch
-        0042-Cygwin-pty-Fixup-pty-state-after-a-cygwin-app-exits.patch
-        0043-Cygwin-pty-grow-GetConsoleProcessList-buffer-in-find.patch
-        0044-Cygwin-pty-bound-the-cursor-sync-round-trip-so-an-ex.patch
-        0045-Cygwin-pty-do-not-leak-nat-handles-when-adopting-the.patch
-        0046-Cygwin-pty-validate-the-cursor-position-reply-before.patch
-        0047-Cygwin-pty-keep-interactive-console-input-for-native.patch
-        0048-Mention-the-extremely-useful-small_printf-function.patch
-        0049-Allow-native-symlinks-to-non-existing-targets-in-nat.patch
-        0050-WIP-Handle-8-bit-characters-under-LOCALE-C.patch
-        0051-Make-paths-WCS-MBS-conversion-explicit.patch
-        0052-msys2-runtime-restore-fast-path-for-current-user-pri.patch
-        0053-Change-the-default-base-address-for-x86_64.patch
-        0054-dumper-allow-compiling-with-binutils-2.47.patch
-        0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch
-        0056-Cygwin-open-Unlock-fdtab-before-open_with_arch.patch
-        0057-Cygwin-console-Fix-regression-in-console-input.patch
-        0058-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch
-        0059-Cygwin-console-Fix-undesired-mode-change-at-exit-of-.patch
-        0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch
-        0061-Cygwin-console-Avoid-deadlock-with-app-execution-ali.patch)
-sha256sums=('7eac3518c0225e991a00a7ad36009090b54abead9dc802236771cde3d9332f7c'
-            '8530392879c3f93aea4680a56ca072219908517a01e69f1a029558190da057da'
-            '7c83791a32dbc139159802b7349fe50f69610863feea99bddcbed7d8d449b34f'
-            '961fdf373c882fdec852453a6db368c2817fa4c422a5f786f51e277be1a68621'
-            '92cdf141ffdd4142fb209da4d5b3cb7264e9fc55e70d2a88df8e2971a920b1ea'
-            '3a4bb9f4c814bf3654f4a0dedf5dbcf1a42778c968fa754ed3cdcaba73a73f4b'
-            'c5d80e2182cab9e4fc2913fcaacafe0bfbca2a702a145fd8028fd9e194acc723'
-            'fd86635e9db2616b923768cc05ba5142c449cdfb9a4487069041df6d280e4a63'
-            '2e687cadeef3063b9aeda09e78cb24458ea89cc3cb9430ed2cd28841b0baaa64'
-            '1259e2378aedc791110dca771a9a8b4a17e13a0cb56bd6df41a4a9185b330421'
-            '0bb91f6db9b4f250e485489c4e197559228bb62f1ee7c0c96af40e31ac00011a'
-            '053bf716176fab8a4d2689e38fc6aace55056c08b367e7956e081659d9407a6e'
-            '7d7c552d01f84074976d82a00a432fe507515d91b044c88f0c4f49562897e60c'
-            'ded80e37054c58fab9b478dd41b0101bec5e84692f220d17cc7a06dc5fc85873'
-            'e42892276bd9f7c23cce7ade30e3bc3e61ea506da39913b74f1aa0b324803520'
-            '14cdaa70a590ce39ad792fe1ae5be587f2d7175b48c53d3ba1e9539f7605c90e'
-            'a17d69cb86cbfa0602e2ac41265e0f32c5319b27a3a0b787de6c45379a7a34bb'
-            'b2eed273092abf2cf4c72637ac8fdbcf3773ae83c0b756a34732a645b00808c8'
-            '88939e504a0ea6e4da9ce38a8bd162022385a4756d4b8617059583501e74fa57'
-            '11c5c8a4b7dfb68a878186aaa6c483ca7f18a6fec35d2908a9b4648e004bb760'
-            '0e53ae1518f4387d68e5e4b2ed572ab5cc11faf2e08f5fbdf856290b8255c1d4'
-            '477f2ede944892abfe9a281566fe978895afbcb1ddb82647744ff24b417d3960'
-            '9c548463d07ef588f807cacfbf4c32473b95f8b538c633b3c723bb2ade80f75b'
-            'aad2ca769b0c1bfaa2ae8e3682e3fdd3e047592014eaac78078c87e623c98609'
-            '23518ac5ffa786640939d554311abf50c025225fa241b436dbcad50c91ff4d01'
-            '7a5a6bf5d56398d017df77ddbd516f2771f1f02d3f62c666b3264f2b9053f743'
-            '5084a444d1df4e6c5e2c4744a03c4b2675dea6ca940724681975605143f64a30'
-            '026f8a76a697c72910bdd259e31136a9e365042784645496ce6df860a20fce67'
-            'ed585c69059f23c93a0657f6e516a48cb76119c98dd48a6f86f3f1775940d73c'
-            '98179077149f83dfda4cb7cb95e01b946acce9535f6af921dafd8b7966b7d665'
-            'c43a61ccd08905a02baba318d8832208b62ac3f4db93644ea0f336cdc26b1f11'
-            'da2dd899223e23914c42ba9262a3656aab996254668ec8d7a7d03219ff3a6f69'
-            'd36f2792e6caa1615de1c3d134d918ec5ebbfab1149e06954e4cbab2b4df49e9'
-            '55934ac4f869b48d7781512572cbf4c3e5dcf24210b4a83561bdc929515af667'
-            'eeac4f9a5281c97f647d6d4a35117bebb41f6b86805ac9afcfedb13d36de7420'
-            '7c5d27ffa2d20694983556c43ecc4e6e6637bed2b77b8cdc4f816e61007b19b8'
-            'af4c40d7c30bd2c163a74fec6ee40c5705798fb6b4a6622059d55d88f654185b'
-            '459599bfc4b1ce684d22f56c6786eacc336bf6c5856698c18a1689b6b0e4f5ce'
-            '9ac0b67bb00be6bb14b5b140ea92c53030b96338ab1f36814f8d891f0a0d9657'
-            '81ecb8ba492d84417d3723e814e8cfd031c4d434e3b1c14389d7464243825029'
-            '862fb81d0f90dc4870f47466068602469740268937924c1c7de9523681ce6adb'
-            '417cfa1e91b99465cf0d75f428664a5258fb5b0560d249d068038c6c4ec3b20a'
-            'd9560dbc9080e3840c144b43803487c69780785d18dfa00cadb08a927716ec73'
-            '223dc9cd43280ecdb9752704c99e6e212c639e7e450501985175a881fa4ed1da'
-            'c7c4067cff81e24a096209a3cd9eafa8c7b34eb41e4e9b2c61c80485992f9dab'
-            '474e273a85aef19503476a6a6292dedcd00639d1b4bfeebd10136df17e60ea53'
-            '61b9ccc5818f79f69879064f08f812ed3d2364faa3ef83bda6d4774addff3d1b'
-            '217fdcfd6fc02b37a4d2af904444c71b39ff3ce588a3603ac697cd224f5d7e2e'
-            'd2860089773757658e01a38d5b8fd003afab02e59e1ba2301b798b7f1af715c9'
-            '03860bc30fff51e81af60f584d5ab2c6260574f710e6b2965a7af23c9d0171c5'
-            '1ac4480922ca122e88fa18607a396eb348a7adf43e33dfb1fa5241e6c349368a'
-            'e94e08850accda885d82e154fec040c6bab36ff3839c047fcac2e785410062eb'
-            'f4e9b8aadcaa47d1debbb9509836a93e2233aa3c79b56d13897711a92a98e31e'
-            '2c393c0dc2b2b5d62a767cccd80dd89c8d7950edbf25e44dd7d2aee89c894b6d'
-            '8588d779158683b1df0b6170029e22939af9d7f412e654e8d601e15eff6810cb'
-            '35ee2aef88e6e686e9cc762ca7fb1326fd607a49aef103d6e277ce0aaf261ce6'
-            '380b0683f91295085f6e4eb4b82c758c1c520ac0623b84cd4a7142fb287c0580'
-            'caf67c600677668e1f28c450d4014c5c9b366568d352d0716cd44908d1d059d6'
-            '952afd51b6a07ca0a07f90708ea0a6333bf57c05e18e107b5fe0815cc11829e0'
-            '8d24e2069e43f5e65717de0913d90497bbd873e6cc3dded3cebbf04b3906ba44'
-            'ec07420cca3f984069525049644ed609ba6cfac557e7472ce15b0672a95bf3c9'
-            '337366290b4d333b13da947bb31d7deff2c595760740d4a6c10237a9be9442e4'
-            'e9d022a50769b82bf5ba556af500476d88d2140eeb02ca0d4289e9e1b694a24b')
+        0001-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch
+        0002-Cygwin-Fix-segfault-when-XSAVE-area-sizes-are-unalig.patch
+        0003-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch
+        0004-Cygwin-testsuite-cover-console-mode-preservation-wit.patch
+        0005-Cygwin-Guard-XSAVE-allocation-against-broken-CPUID-e.patch
+        0006-Cygwin-fix-build-under-ISO-C-20.patch
+        0007-Cygwin-tls-keep-incyg-updates-compatible-with-C-20.patch
+        0008-Cygwin-fork-avoid-deprecated-volatile-parameters.patch
+        0009-Cygwin-cygcheck-respect-const-input-when-scanning-ar.patch
+        0010-Cygwin-strace-keep-argument-scanning-const-correct.patch
+        0011-Cygwin-cygcheck-preserve-constness-when-scanning-ext.patch
+        0012-Cygwin-cygcheck-keep-application-path-separator-scan.patch
+        0013-.gitattributes-enforce-Unix-line-endings-in-.sh-scri.patch
+        0014-Fix-msys-library-name-in-import-libraries.patch
+        0015-Rename-dll-from-cygwin-to-msys.patch
+        0016-Convert-Unix-paths-in-args-env-to-Windows-form-for-n.patch
+        0017-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch
+        0018-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch
+        0019-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch
+        0020-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch
+        0021-Do-not-convert-environment-for-strace.patch
+        0022-strace.cc-Don-t-set-MSYS-noglob.patch
+        0023-Add-debugging-for-strace-make_command_line.patch
+        0024-strace-quiet-be-really-quiet.patch
+        0025-path_conv-special-case-root-directory-to-have-traili.patch
+        0026-When-converting-to-a-Unix-path-avoid-double-trailing.patch
+        0027-dcrt0.cc-Untangle-allow_glob-from-winshell.patch
+        0028-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch
+        0029-Add-debugging-for-build_argv.patch
+        0030-environ.cc-New-facility-environment-variable-MSYS2_E.patch
+        0031-Introduce-the-enable_pcon-value-for-MSYS.patch
+        0032-popen-call-usr-bin-sh-instead-of-bin-sh.patch
+        0033-Expose-full-command-lines-to-other-Win32-processes-b.patch
+        0034-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch
+        0035-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch
+        0036-kill-kill-Win32-processes-more-gently.patch
+        0037-Cygwin-make-option-for-native-inner-link-handling.patch
+        0038-docs-skip-building-texinfo-and-PDF-files.patch
+        0039-install-libs-depend-on-the-toollibs.patch
+        0040-POSIX-ify-the-SHELL-variable.patch
+        0041-Handle-ORIGINAL_PATH-just-like-PATH.patch
+        0042-uname-allow-setting-the-system-name-to-CYGWIN.patch
+        0043-Pass-environment-variables-with-empty-values.patch
+        0044-Optionally-disallow-empty-environment-values-again.patch
+        0045-build_env-respect-the-MSYS-environment-variable.patch
+        0046-Avoid-sharing-cygheaps-across-Cygwin-versions.patch
+        0047-uname-report-msys2-runtime-commit-hash-too.patch
+        0048-Cygwin-pty-detect-pcon-backed-pty-for-non-Cygwin-spa.patch
+        0049-Cygwin-pty-Discard-pcon-input-buffer-when-discard_in.patch
+        0050-Cygwin-pty-Fixup-pty-state-after-a-cygwin-app-exits.patch
+        0051-Cygwin-pty-grow-GetConsoleProcessList-buffer-in-find.patch
+        0052-Cygwin-pty-bound-the-cursor-sync-round-trip-so-an-ex.patch
+        0053-Cygwin-pty-do-not-leak-nat-handles-when-adopting-the.patch
+        0054-Cygwin-pty-validate-the-cursor-position-reply-before.patch
+        0055-Cygwin-pty-keep-interactive-console-input-for-native.patch
+        0056-Mention-the-extremely-useful-small_printf-function.patch
+        0057-Allow-native-symlinks-to-non-existing-targets-in-nat.patch
+        0058-WIP-Handle-8-bit-characters-under-LOCALE-C.patch
+        0059-Make-paths-WCS-MBS-conversion-explicit.patch
+        0060-msys2-runtime-restore-fast-path-for-current-user-pri.patch
+        0061-Change-the-default-base-address-for-x86_64.patch)
+sha256sums=('adb4d73a9457928bc9366799f04d0766207d0fb268b00de6f27ab86065d8b5a4'
+            'f837a4f66842f23aee9cd5d970a23294bfd974422061bb479e3aaafb201e6d14'
+            'dbd17907ea3d62c306590874a5527603360b87dcf3829098bcea64a47a64d4a1'
+            '5f0ca179a559d0206641b24f9f8ed78dd79c3aa35c279287ebfd611e1ddd4024'
+            '0be93b93843442521ee402925ffd521ec0e29ec4ceaeaf7e9e412b69ac789ba3'
+            '2333a6ba75be2e5ecc6a397470c22a576781a9f9558a7528366e94195b501ed1'
+            '1798038807b4ac4e5b1a63db2793ddde0b191af574937631917957fde98c122b'
+            'd66bb7356cdb401c68afca40582fb9d831844a6fee32ef905b3b890509309635'
+            '89deb319efbcc2aed26bdb99202fd05c596810191610cb788448469973d68739'
+            'dc8ac874b136f9a7a3973c5f8fca95bccf8e83d1ac6e590c11574b5e5fe183d6'
+            '205788e29731cda9b295c75fe853f8484eebc6cd56ef3d6066b343b94148bd37'
+            'f81c9d3cab37165831143c554c69b33fae379b93a341e8a20fe6ccadcd0e6161'
+            'a5c7fd714bd023aa187357981db1ed144e4015ee6b14d9fe3f3ad1a5901496df'
+            'e94d3381cc659480e339b6f3875d180fa0a8f221f7b2e701b793a43a04002682'
+            '035f09f9a4b77e714eb8403f33e54f7cba955bb410f401b094953f7652c92aec'
+            'a970bdf4dd7b1b74276083c132faa64190c03a6a00f1b7cb469bdd814edf3038'
+            '6bd1926ac7d265f269a98a7d605a00aa74d392ab268e375a333438122218316a'
+            '76159a7637eb69d61e63b2aef8f4acb4b09bd3d7f1e6cc4ada3570ad68b8c8b5'
+            'e52fab6d3eb13cec3195d102d00dcfb0f7dd13ec0d8500cc2f9048a055d50259'
+            'a0aefcb47d48e3079c171b550772ae99fb5bf55f1aedc6836ae39fdd5fc0a2e0'
+            '14470ff25e149b26974c51d6730f81f5bbfaf9b501aa8a87d0e322bbad539392'
+            '8ce46d6cfad1d094dc1e7817b4ccf353674f9036faac475195aec32655b40004'
+            'd86d1049810de12c13c2246f29212f03fd22c4f3f1de81d8c2e42e7a5d306cd9'
+            '1a3aba2dae59001d0dc05288305adbdcd84c5136db549cdfe1856c74d2c99063'
+            '236a68e1404aea5acbf1cef86c0b7c8744d86d3aa45f0ca38522dc84043a0a72'
+            'dffb2c90f0a89dd53cce040d6cb7dab64ffc61141cbb86a5b3b07f0b476ec2e0'
+            'bec475d12f0614ceba29463cdd6698862019c5c512ba349606dddea7d5aa3667'
+            '0dbfb27df6c3f18586afc35000e4b774de498d19ae35afedb9e096880edb0f00'
+            '206135ea400c9a7ae5796349d0123bc54020713af256e0935b02b1bd5f8f3615'
+            '21898250f2963469e0269dd218259419f0b618f898d9b8cbbd8dcea6f4b7568a'
+            '8c0412043cbe8c5b99a152982585c7747b151bd84fa72a258316a362473f0a96'
+            'bc888c49a00e7a84f34c1acae5f8aa5cd843ec01dd3cf2a7f1c4a1780b4261a1'
+            '907f4322e29fad2f93770c2baa9a2fe581da24694f695dcfa13953024b9339ca'
+            'a9bb4ddc4c53aa10b3c0c274f464a411bcf0463b2bb9b85fa890bbaa11b584d1'
+            '5d1ef088e1984c0d34c54a345e318591f444d5f1ec428aff75ed5ff6fbc81797'
+            '72aab3f05d962198eb0f6d30d82b713153ec46161f0e5e95c3c9bbfd1ef12899'
+            '5136c9517484f184cf266f7ef23a3c3f8f7fc8d8bd4ef6515e47954cd5a300bb'
+            '15e9a823e294b4daaeba04bfd02e5d8c4bdf9b9388a2e995cc68d1d276505c1d'
+            'c3a9792a1634a3bf422984a1a957d87d549ec5cd2b4eada1cdf021e17c406088'
+            '7fa3d77e25cba20f6824ead02a75844891316ff6db74c5b4bcaa3be1f2ae2ae8'
+            '8b1cead84c7347ac4df5e2fb82cbdb9f607b0e8bb235e0a40011495f9933d6ac'
+            '3cb36a637f4f608a00119a66b8e0bb632e820d43eabc998c0bb3d71935357f45'
+            'd8e7c3dc2fe67f0771b4d59ba39aae73969d4de8355208176eb8fa1ff3ef0007'
+            '787f9fa5d5b4626fd13282fd99fcc8e282722ea3905abd900c4c2609eb720fb2'
+            '9d0eb84609b21988546585e716a1d15a2ed540dced49d9c9c11bf82f92180958'
+            '0ac49b56337b90650c01ad572cba3a4d28bdd66a6f0340d1c52fc48b914e83c7'
+            '0f45c7580e09ca0993586c835ecb9c123d297ee09b4652fc02ace474a268d098'
+            '3ba600c18528839b175fc639f682bc23925f2495868d7e64541cad887071f4e3'
+            '8391702822c51232c5760a2303f938f455eb5af98e77b5b6b16501541c67880b'
+            'a0d2c2b5d6054f0ee2a3a07a1387fd47ef0cf354a92981bf4fc58d5ffae8d448'
+            '8e53f566e69a0da1da6818e206e92fdd0a49637b915b7020c1b18a4204dcb13b'
+            'b621e339128d5d4e1fbac0cbae96a20051cf4417150df894abf6dca2c3fbb79e'
+            '356ecc968453dfd485c66065c886874fc38b0068d42939c3f8b6bebfcecb4469'
+            'fb80fbf2883adbb4cf1bdee404c317e5554dfddff180b3568893560ef41c5559'
+            '7e85016fbbad1f9363bc918c75e67fddaa49bf8f7c215043f53ce43fa708ce3f'
+            '46f50a18e934f220e4fdfd37c66de1a3f8b7512d89d488a7d853a96881732aea'
+            'ad3b16c03ae8e4f5e57c80198aa0ab465a56e1072f73b748d1e9a73a929537f8'
+            '60bad8384d256a67b3a45f8e306cd8264da44315183390512f2a51a9dd9190d0'
+            '249d47a5d5b54d163d9747a68a669dafb5b973729469d02030cfbaa35c9e7c33'
+            'aa7997cd14fec97214eb86bb2c2e09c7008dd4deeb0d4b2b9ed37f322c4614c6'
+            '4055b0f22c927ffc64e4f0da81de9c8ec082945eb22fedd232891adc84851ffb'
+            '5c80cee434f2785ca0cd5102809e7debed846a0708ef11100b9d4dd3400988e8'
+            '124a57c49a8e65595ea01f3b8ca150ca2832bcbabe8ea0dd6f6eab10d5df7e1e')
 
 # Helper macros to help make tasks easier #
 apply_patch_with_msg() {
@@ -208,67 +208,67 @@ prepare() {
 
   apply_patch_with_msg \
  \
-  0001-Fix-msys-library-name-in-import-libraries.patch \
-  0002-Rename-dll-from-cygwin-to-msys.patch \
-  0003-Convert-Unix-paths-in-args-env-to-Windows-form-for-n.patch \
-  0004-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch \
-  0005-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch \
-  0006-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch \
-  0007-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch \
-  0008-Do-not-convert-environment-for-strace.patch \
-  0009-strace.cc-Don-t-set-MSYS-noglob.patch \
-  0010-Add-debugging-for-strace-make_command_line.patch \
-  0011-strace-quiet-be-really-quiet.patch \
-  0012-path_conv-special-case-root-directory-to-have-traili.patch \
-  0013-When-converting-to-a-Unix-path-avoid-double-trailing.patch \
-  0014-dcrt0.cc-Untangle-allow_glob-from-winshell.patch \
-  0015-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch \
-  0016-Add-debugging-for-build_argv.patch \
-  0017-environ.cc-New-facility-environment-variable-MSYS2_E.patch \
-  0018-Introduce-the-enable_pcon-value-for-MSYS.patch \
-  0019-popen-call-usr-bin-sh-instead-of-bin-sh.patch \
-  0020-Expose-full-command-lines-to-other-Win32-processes-b.patch \
-  0021-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch \
-  0022-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch \
-  0023-kill-kill-Win32-processes-more-gently.patch \
-  0024-Cygwin-make-option-for-native-inner-link-handling.patch \
-  0025-docs-skip-building-texinfo-and-PDF-files.patch \
-  0026-install-libs-depend-on-the-toollibs.patch \
-  0027-POSIX-ify-the-SHELL-variable.patch \
-  0028-Handle-ORIGINAL_PATH-just-like-PATH.patch \
-  0029-uname-allow-setting-the-system-name-to-CYGWIN.patch \
-  0030-Pass-environment-variables-with-empty-values.patch \
-  0031-Optionally-disallow-empty-environment-values-again.patch \
-  0032-build_env-respect-the-MSYS-environment-variable.patch \
-  0033-Revert-Cygwin-Enable-dynamicbase-on-the-Cygwin-DLL-b.patch \
-  0034-Avoid-sharing-cygheaps-across-Cygwin-versions.patch \
-  0035-uname-report-msys2-runtime-commit-hash-too.patch \
-  0036-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch \
-  0037-Cygwin-Fix-segfault-when-XSAVE-area-sizes-are-unalig.patch \
-  0038-cygcheck-remove-an-unused-variable-causing-a-build-e.patch \
-  0039-fixup-Convert-Unix-paths-in-args-env-to-Windows-form.patch \
-  0040-Cygwin-pty-detect-pcon-backed-pty-for-non-Cygwin-spa.patch \
-  0041-Cygwin-pty-Discard-pcon-input-buffer-when-discard_in.patch \
-  0042-Cygwin-pty-Fixup-pty-state-after-a-cygwin-app-exits.patch \
-  0043-Cygwin-pty-grow-GetConsoleProcessList-buffer-in-find.patch \
-  0044-Cygwin-pty-bound-the-cursor-sync-round-trip-so-an-ex.patch \
-  0045-Cygwin-pty-do-not-leak-nat-handles-when-adopting-the.patch \
-  0046-Cygwin-pty-validate-the-cursor-position-reply-before.patch \
-  0047-Cygwin-pty-keep-interactive-console-input-for-native.patch \
-  0048-Mention-the-extremely-useful-small_printf-function.patch \
-  0049-Allow-native-symlinks-to-non-existing-targets-in-nat.patch \
-  0050-WIP-Handle-8-bit-characters-under-LOCALE-C.patch \
-  0051-Make-paths-WCS-MBS-conversion-explicit.patch \
-  0052-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
-  0053-Change-the-default-base-address-for-x86_64.patch \
-  0054-dumper-allow-compiling-with-binutils-2.47.patch \
-  0055-Cygwin-pty-preserve-terminal-replies-after-PTY-adopt.patch \
-  0056-Cygwin-open-Unlock-fdtab-before-open_with_arch.patch \
-  0057-Cygwin-console-Fix-regression-in-console-input.patch \
-  0058-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch \
-  0059-Cygwin-console-Fix-undesired-mode-change-at-exit-of-.patch \
-  0060-Cygwin-console-Abort-setting-disable_master_thread-w.patch \
-  0061-Cygwin-console-Avoid-deadlock-with-app-execution-ali.patch
+  0001-Cygwin-Adjust-CWD-magic-to-accommodate-for-the-lates.patch \
+  0002-Cygwin-Fix-segfault-when-XSAVE-area-sizes-are-unalig.patch \
+  0003-Cygwin-console-Set-console-mode-only-if-std-in-out-e.patch \
+  0004-Cygwin-testsuite-cover-console-mode-preservation-wit.patch \
+  0005-Cygwin-Guard-XSAVE-allocation-against-broken-CPUID-e.patch \
+  0006-Cygwin-fix-build-under-ISO-C-20.patch \
+  0007-Cygwin-tls-keep-incyg-updates-compatible-with-C-20.patch \
+  0008-Cygwin-fork-avoid-deprecated-volatile-parameters.patch \
+  0009-Cygwin-cygcheck-respect-const-input-when-scanning-ar.patch \
+  0010-Cygwin-strace-keep-argument-scanning-const-correct.patch \
+  0011-Cygwin-cygcheck-preserve-constness-when-scanning-ext.patch \
+  0012-Cygwin-cygcheck-keep-application-path-separator-scan.patch \
+  0013-.gitattributes-enforce-Unix-line-endings-in-.sh-scri.patch \
+  0014-Fix-msys-library-name-in-import-libraries.patch \
+  0015-Rename-dll-from-cygwin-to-msys.patch \
+  0016-Convert-Unix-paths-in-args-env-to-Windows-form-for-n.patch \
+  0017-Add-functionality-for-changing-OS-name-via-MSYSTEM-e.patch \
+  0018-Move-root-to-usr.-Change-sorting-mount-points.-By-de.patch \
+  0019-Instead-of-creating-Cygwin-symlinks-use-deep-copy-by.patch \
+  0020-Automatically-rewrite-TERM-msys-to-TERM-cygwin.patch \
+  0021-Do-not-convert-environment-for-strace.patch \
+  0022-strace.cc-Don-t-set-MSYS-noglob.patch \
+  0023-Add-debugging-for-strace-make_command_line.patch \
+  0024-strace-quiet-be-really-quiet.patch \
+  0025-path_conv-special-case-root-directory-to-have-traili.patch \
+  0026-When-converting-to-a-Unix-path-avoid-double-trailing.patch \
+  0027-dcrt0.cc-Untangle-allow_glob-from-winshell.patch \
+  0028-dcrt0.cc-globify-Don-t-quote-literal-strings-differe.patch \
+  0029-Add-debugging-for-build_argv.patch \
+  0030-environ.cc-New-facility-environment-variable-MSYS2_E.patch \
+  0031-Introduce-the-enable_pcon-value-for-MSYS.patch \
+  0032-popen-call-usr-bin-sh-instead-of-bin-sh.patch \
+  0033-Expose-full-command-lines-to-other-Win32-processes-b.patch \
+  0034-Add-a-helper-to-obtain-a-function-s-address-in-kerne.patch \
+  0035-Emulate-GenerateConsoleCtrlEvent-upon-Ctrl-C.patch \
+  0036-kill-kill-Win32-processes-more-gently.patch \
+  0037-Cygwin-make-option-for-native-inner-link-handling.patch \
+  0038-docs-skip-building-texinfo-and-PDF-files.patch \
+  0039-install-libs-depend-on-the-toollibs.patch \
+  0040-POSIX-ify-the-SHELL-variable.patch \
+  0041-Handle-ORIGINAL_PATH-just-like-PATH.patch \
+  0042-uname-allow-setting-the-system-name-to-CYGWIN.patch \
+  0043-Pass-environment-variables-with-empty-values.patch \
+  0044-Optionally-disallow-empty-environment-values-again.patch \
+  0045-build_env-respect-the-MSYS-environment-variable.patch \
+  0046-Avoid-sharing-cygheaps-across-Cygwin-versions.patch \
+  0047-uname-report-msys2-runtime-commit-hash-too.patch \
+  0048-Cygwin-pty-detect-pcon-backed-pty-for-non-Cygwin-spa.patch \
+  0049-Cygwin-pty-Discard-pcon-input-buffer-when-discard_in.patch \
+  0050-Cygwin-pty-Fixup-pty-state-after-a-cygwin-app-exits.patch \
+  0051-Cygwin-pty-grow-GetConsoleProcessList-buffer-in-find.patch \
+  0052-Cygwin-pty-bound-the-cursor-sync-round-trip-so-an-ex.patch \
+  0053-Cygwin-pty-do-not-leak-nat-handles-when-adopting-the.patch \
+  0054-Cygwin-pty-validate-the-cursor-position-reply-before.patch \
+  0055-Cygwin-pty-keep-interactive-console-input-for-native.patch \
+  0056-Mention-the-extremely-useful-small_printf-function.patch \
+  0057-Allow-native-symlinks-to-non-existing-targets-in-nat.patch \
+  0058-WIP-Handle-8-bit-characters-under-LOCALE-C.patch \
+  0059-Make-paths-WCS-MBS-conversion-explicit.patch \
+  0060-msys2-runtime-restore-fast-path-for-current-user-pri.patch \
+  0061-Change-the-default-base-address-for-x86_64.patch
 }
 
 build() {
