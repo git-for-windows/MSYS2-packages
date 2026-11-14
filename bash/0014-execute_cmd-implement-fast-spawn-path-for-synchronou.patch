@@ -1,0 +1,301 @@
+From a8c14e92141fbc92dcabb09768d7a26fe9052ca3 Mon Sep 17 00:00:00 2001
+From: Johannes Schindelin <johannes.schindelin@gmx.de>
+Date: Tue, 5 May 2026 10:14:22 +0200
+Subject: [PATCH 14/N] execute_cmd: implement fast-spawn path for synchronous
+ external commands
+
+On Cygwin (and therefore MSYS2, on which Git for Windows is built),
+`fork()` must emulate POSIX copy-on-write semantics by snapshotting the
+parent's address space. That is by far the most expensive part of
+spawning a child process; an empirical microbenchmark shows ~30ms per
+`fork()` & `execve()` versus ~14ms per `spawnve()`, and 200 sequential
+externals from Bash take ~7.5s with the unmodified bash versus ~3.4s
+with this change, a 2.2-2.5x speedup that compounds heavily over a full
+Git test run, where each `test_expect_success` goes through dozens of
+cheap externals like `/usr/bin/true`.
+
+Thankfully, there is a remedy in sight: `posix_spawn()`. This requires
+specific support in the MSYS2 runtime. With this, we can add a
+fast-spawn path for plain external commands with no pipes, no
+redirections, no async, no `CMD_NO_FORK`, and no `fds_to_close`.
+
+The helper does not replace bash's job-tracking machinery; it only
+substitutes for the `fork()` & `execve()` pair. The flow closely mirrors
+what `make_child()` does on the parent side.
+
+The caller's existing
+
+    if (already_making_children && pipe_out == NO_PIPE)
+        wait_for (last_made_pid, 0);
+
+path then runs unchanged, so `$?`, the `ERR` trap, `set -e`, command
+substitution, `PIPESTATUS` for the trivial case and friends keep
+working exactly as for forked children.
+
+The excluded conditions each have a specific reason. Pipes and
+redirections require fd surgery that the regular path does in the
+post-fork child; supporting them on the spawn path means pre-arranging
+the fds in the parent and then restoring them, which is straightforward
+but deserves its own commit. Async (`&`) needs slightly different
+bookkeeping (the child's pid becomes `$!` and is added to the
+asynchronous-jobs list). `CMD_NO_FORK` means the caller intends to skip
+the fork entirely and exec in place, which `spawnve()` cannot match.
+`fds_to_close` is the bitmap of pipe fds inherited from an enclosing
+pipeline that the child must not see; the regular path closes them in
+the child after `fork()`, but a spawned child inherits all open fds
+without that hook. All of these are addressable in follow-up commits.
+
+One ownership detail worth flagging for future maintainers:
+`strvec_from_word_list()` returns an argv whose entries alias the
+`WORD_LIST`'s strings when its `alloc` parameter is 0. That is fine for
+the regular path because the `alloc == 0` callers run in the post-fork
+child where the subsequent `execve()` makes any double-free moot.
+`fast_spawn_command()` runs in the parent, so it must pass `alloc = 1`
+to get a deeply-copied argv; otherwise `strvec_dispose()` would free
+strings still owned by `words`, and the immediately following
+`dispose_words()` at `parent_return` would double-free them, producing
+`SIGABRT` inside `dispose_words()` several stack frames deep into the
+malloc arena's consistency check.  Vanilla bash has no in-tree caller of
+`strvec_from_word_list()` with `alloc = 1` plus parent-side disposal, so
+the convention is not documented anywhere upstream.
+
+Assisted-by: Opus 4.7
+Signed-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>
+---
+ execute_cmd.c | 190 +++++++++++++++++++++++++++++++++++++++++++++++---
+ sig.h         |   1 +
+ 2 files changed, 182 insertions(+), 9 deletions(-)
+
+diff --git a/execute_cmd.c b/execute_cmd.c
+index 05ef70f..4e0b774 100644
+--- a/execute_cmd.c
++++ b/execute_cmd.c
+@@ -94,6 +94,10 @@ extern int errno;
+ 
+ #include "input.h"
+ 
++#if defined (__CYGWIN__)
++#  include <spawn.h>
++#endif
++
+ #if defined (ALIAS)
+ #  include "alias.h"
+ #endif
+@@ -6457,14 +6461,61 @@ do_piping (int pipe_in, int pipe_out)
+ }
+ 
+ #ifdef __CYGWIN__
++static int
++fast_spawn_add_tty_sigdefaults (sigset_t *set)
++{
++  int added = 0;
++
++#if defined (SIGTSTP)
++  if (signal_is_trapped (SIGTSTP) || !signal_is_hard_ignored (SIGTSTP))
++    {
++      sigaddset (set, SIGTSTP);
++      added = 1;
++    }
++#endif
++#if defined (SIGTTIN)
++  if (signal_is_trapped (SIGTTIN) || !signal_is_hard_ignored (SIGTTIN))
++    {
++      sigaddset (set, SIGTTIN);
++      added = 1;
++    }
++#endif
++#if defined (SIGTTOU)
++  if (signal_is_trapped (SIGTTOU) || !signal_is_hard_ignored (SIGTTOU))
++    {
++      sigaddset (set, SIGTTOU);
++      added = 1;
++    }
++#endif
++
++  return added;
++}
++
++static int
++fast_spawn_add_exec_sigdefault (sigset_t *set, int sig)
++{
++  if (signal_is_hard_ignored (sig)
++      || (signal_is_trapped (sig) && signal_is_ignored (sig)))
++    return 0;
++  sigaddset (set, sig);
++  return 1;
++}
++
+ /* Posix-spawn-based fast path for synchronous external commands on
+-   MSYS2/Cygwin.  This is a scaffold: the function always declines.
+-   Subsequent commits fill in actual fast-path support for the common
+-   cases (plain externals, simple redirections, pipelines, heredocs,
+-   async, etc.).  The scaffold exists from the start of the patch
+-   series so that the user-visible escape hatch (the `nofastspawn'
+-   shopt) and the caller's decline-handling logic are in place before
+-   any fast-path code executes. */
++   MSYS2/Cygwin.  Uses `posix_spawn(...)`, which lowers the complexity
++   on Windows; that is roughly twice as fast as
++   `fork(...)` + `execve(...)` because Cygwin's `fork(...)` has to
++   emulate POSIX copy-on-write semantics by snapshotting the parent's
++   address space.
++
++   On success returns the pid of the new child, already registered with
++   the job table so the caller's normal `wait_for(last_made_pid)` path
++   reaps it.  Returns `FAST_SPAWN_DECLINE` if the command cannot be
++   handled by the fast path (pipes, redirections, async, `CMD_NO_FORK`,
++   `fds_to_close`, or `shopt -s nofastspawn`), in which case the
++   caller must fall back to `make_child(...)`.  Subsequent commits
++   extend the fast path to cover more cases (redirections, pipelines,
++   heredocs, async, ...). */
+ 
+ static pid_t
+ fast_spawn_command (char *command, WORD_LIST *words,
+@@ -6472,13 +6523,134 @@ fast_spawn_command (char *command, WORD_LIST *words,
+ 		    int pipe_in, int pipe_out, int async,
+ 		    struct fd_bitmap *fds_to_close, int cmdflags)
+ {
++  char **args;
++  pid_t pid;
++  posix_spawnattr_t spawnattr;
++  sigset_t set, oset, sigdefault;
++  short spawn_flags;
++  int fork_flags;
++  int spawn_error, spawnattr_initialized;
++  int have_sigdefault, new_process_group;
++
+   /* Runtime escape hatch: when `shopt -s nofastspawn' is in effect,
+      always decline so the caller falls through to the regular
+      fork()+exec() path.  Useful to verify whether an issue is caused
+      by the fast path. */
+   if (nofastspawn_set)
+     return FAST_SPAWN_DECLINE;
+-  /* No fast-path implementation yet.  Decline. */
+-  return FAST_SPAWN_DECLINE;
++
++  /* Conditions we don't yet handle.  Bail out and let make_child do it. */
++  if (pipe_in != NO_PIPE || pipe_out != NO_PIPE)
++    return FAST_SPAWN_DECLINE;
++  if (redirects)
++    return FAST_SPAWN_DECLINE;
++  if (async)
++    return FAST_SPAWN_DECLINE;
++  if (cmdflags & CMD_NO_FORK)
++    return FAST_SPAWN_DECLINE;
++
++  /* If there are inherited pipe fds that the child must not see,
++     fall back; the regular path closes them in the child after fork. */
++  if (fds_to_close)
++    {
++      int i;
++      for (i = 0; i < fds_to_close->size; i++)
++	if (fds_to_close->bitmap[i])
++	  return FAST_SPAWN_DECLINE;
++    }
++
++  /* Mirror make_child's signal blocking around the spawn so that SIGCHLD
++     for the new child is held until we have registered it in the job
++     table.  Otherwise waitchld() could fire before add_process(). */
++  sigemptyset (&set);
++  sigaddset (&set, SIGCHLD);
++  sigaddset (&set, SIGINT);
++  sigaddset (&set, SIGTERM);
++  sigemptyset (&oset);
++  sigprocmask (SIG_BLOCK, &set, &oset);
++
++  making_children ();
++
++  args = strvec_from_word_list (words, 1, 0, (int *)NULL);
++
++  spawn_flags = POSIX_SPAWN_SETSIGMASK;
++  sigemptyset (&sigdefault);
++  have_sigdefault = 0;
++
++  if (!async)
++    {
++#if defined (SIGINT)
++      have_sigdefault |= fast_spawn_add_exec_sigdefault (&sigdefault,
++							 SIGINT);
++#endif
++#if defined (SIGQUIT)
++      have_sigdefault |= fast_spawn_add_exec_sigdefault (&sigdefault,
++							 SIGQUIT);
++#endif
++    }
++
++  /* The fork child calls default_tty_job_signals() unless it is being
++     placed back into the shell's own process group (command substitution).
++     Bash itself ignores these signals while managing an interactive
++     terminal, so explicitly restore their child-side defaults. */
++  if (job_control == 0 || pipeline_pgrp != shell_pgrp)
++    have_sigdefault = fast_spawn_add_tty_sigdefaults (&sigdefault);
++
++  if (have_sigdefault)
++    spawn_flags |= POSIX_SPAWN_SETSIGDEF;
++
++  new_process_group = job_control && pipeline_pgrp == 0;
++  if (job_control)
++    spawn_flags |= POSIX_SPAWN_SETPGROUP;
++
++  spawnattr_initialized = 0;
++  spawn_error = posix_spawnattr_init (&spawnattr);
++  if (spawn_error == 0)
++    {
++      spawnattr_initialized = 1;
++      spawn_error = posix_spawnattr_setsigmask (&spawnattr,
++						&top_level_mask);
++    }
++  if (spawn_error == 0 && have_sigdefault)
++    spawn_error = posix_spawnattr_setsigdefault (&spawnattr, &sigdefault);
++  if (spawn_error == 0 && job_control)
++    spawn_error = posix_spawnattr_setpgroup (&spawnattr, pipeline_pgrp);
++  if (spawn_error == 0)
++    spawn_error = posix_spawnattr_setflags (&spawnattr, spawn_flags);
++  if (spawn_error == 0)
++    spawn_error = posix_spawn (&pid, command, (posix_spawn_file_actions_t *)0,
++			       &spawnattr, args, export_env);
++
++  if (spawnattr_initialized)
++    posix_spawnattr_destroy (&spawnattr);
++
++  /* posix_spawn set the first child's pgrp before allowing it to run.
++     Give that group the terminal immediately.  If the child reached a
++     terminal read first and stopped itself with SIGTTIN, resume it now
++     that it is the foreground group. */
++  if (spawn_error == 0 && new_process_group && !async
++      && (subshell_environment & (SUBSHELL_ASYNC|SUBSHELL_PIPE)) == 0
++      && running_in_background == 0
++      && give_terminal_to (pid, 0) == 0)
++    kill (-pid, SIGCONT);
++
++  strvec_dispose (args);
++
++  if (spawn_error != 0)
++    {
++      /* posix_spawn failed; restore signals and fall back to fork+exec. */
++      sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++      return FAST_SPAWN_DECLINE;
++    }
++
++  fork_flags = async ? FORK_ASYNC : 0;
++  register_spawned_child (pid, savestring (command_line), fork_flags);
++
++  /* Unblock signals now that the child is registered; a pending SIGCHLD
++     will be delivered and waitchld() will find the child in the job
++     table just as it would for a forked one. */
++  sigprocmask (SIG_SETMASK, &oset, (sigset_t *)NULL);
++
++  return pid;
+ }
+ #endif /* __CYGWIN__ */
+diff --git a/sig.h b/sig.h
+index 8d197be..a132f49 100644
+--- a/sig.h
++++ b/sig.h
+@@ -104,6 +104,7 @@ do { \
+ /* Extern variables */
+ extern volatile sig_atomic_t sigwinch_received;
+ extern volatile sig_atomic_t sigterm_received;
++extern sigset_t top_level_mask;
+ 
+ extern int interrupt_immediately;	/* no longer used */
+ extern int terminate_immediately;
