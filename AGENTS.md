@@ -33,11 +33,28 @@ Do not use `bash -l` or `bash --login`; login shells may hang in
 Git for Windows SDK environments.
 
 Use `makepkg -s` to install missing dependencies automatically.
-Use `--nocheck` to skip the test suite, `--cleanbuild` to force a
-clean rebuild, and `--skippgpcheck` to skip GPG signature
-verification. Use `makepkg -o` (extract and prepare only) to
-validate that patches apply cleanly without waiting for a full
-compile.
+Use `--nocheck` to skip the test suite and `--skippgpcheck` to skip
+GPG signature verification. Never use `--cleanbuild` when `src/`
+contains a retained playground or other working source tree: it
+deletes the entire directory. Use `makepkg -o` (extract and prepare
+only) to validate that patches apply cleanly without waiting for a
+full compile.
+
+### Test-building the MSYS2 runtime
+
+For an already-prepared `msys2-runtime/src/msys2-runtime` source tree,
+test-build the runtime DLL without packaging it:
+
+    cd msys2-runtime
+    ./test-build-msys2-runtime.sh -j15
+
+The helper resets inherited MINGW environment variables, selects the
+MSYS toolchain, and builds `new-msys-2.0.dll` in a private incremental
+build tree under `src/`. Complete logs are written below that build
+tree. Use `--reconfigure` after build-system changes, `--full` to
+continue with the aggregate build, and `--source-dir` when testing an
+external or linked source tree. The helper never cleans or removes an
+existing build tree.
 
 When a package uses git sources, `updpkgsums` must be run with
 `core.autoCRLF=false` in the Git configuration. Otherwise the
